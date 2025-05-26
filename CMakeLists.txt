@@ -60,10 +60,10 @@ target_link_libraries(livox_repub
   sensor_msgs
   livox_ros_driver2
   pcl_conversions::pcl_conversions # ADDED
+  PCL::Common PCL::Filters PCL::Features PCL::Segmentation PCL::IO PCL::KdTree PCL::SampleConsensus
   ${OpenCV_LIBS}
   Eigen3::Eigen # Modern Eigen uses imported targets
 )
-target_link_libraries(livox_repub ${PCL_LIBRARIES})
 if(OpenMP_FOUND)
   target_link_libraries(livox_repub PRIVATE OpenMP::OpenMP_CXX)
 endif()
@@ -79,10 +79,10 @@ target_link_libraries(loam_scanRegistration
   tf2_ros
   livox_ros_driver2
   pcl_conversions::pcl_conversions # ADDED
+  PCL::Common PCL::Filters PCL::Features PCL::Segmentation PCL::IO PCL::KdTree PCL::SampleConsensus
   ${OpenCV_LIBS}
   Eigen3::Eigen
 )
-target_link_libraries(loam_scanRegistration ${PCL_LIBRARIES})
 if(OpenMP_FOUND)
   target_link_libraries(loam_scanRegistration PRIVATE OpenMP::OpenMP_CXX)
 endif()
@@ -98,10 +98,10 @@ target_link_libraries(loam_scanRegistration_horizon
   tf2_ros
   livox_ros_driver2
   pcl_conversions::pcl_conversions # ADDED
+  PCL::Common PCL::Filters PCL::Features PCL::Segmentation PCL::IO PCL::KdTree PCL::SampleConsensus
   ${OpenCV_LIBS}
   Eigen3::Eigen
 )
-target_link_libraries(loam_scanRegistration_horizon ${PCL_LIBRARIES})
 if(OpenMP_FOUND)
   target_link_libraries(loam_scanRegistration_horizon PRIVATE OpenMP::OpenMP_CXX)
 endif()
@@ -117,10 +117,10 @@ target_link_libraries(loam_laserMapping
   tf2_ros
   livox_ros_driver2
   pcl_conversions::pcl_conversions # ADDED
+  PCL::Common PCL::Filters PCL::Features PCL::Segmentation PCL::IO PCL::KdTree PCL::SampleConsensus
   ${OpenCV_LIBS}
   Eigen3::Eigen
 )
-target_link_libraries(loam_laserMapping ${PCL_LIBRARIES})
 if(OpenMP_FOUND)
   target_link_libraries(loam_laserMapping PRIVATE OpenMP::OpenMP_CXX)
 endif()
