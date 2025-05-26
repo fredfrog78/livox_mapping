@@ -59,11 +59,11 @@ target_link_libraries(livox_repub
   std_msgs
   sensor_msgs
   livox_ros_driver2
-  ${PCL_LIBRARIES}
   pcl_conversions::pcl_conversions # ADDED
   ${OpenCV_LIBS}
   Eigen3::Eigen # Modern Eigen uses imported targets
 )
+target_link_libraries(livox_repub ${PCL_LIBRARIES})
 if(OpenMP_FOUND)
   target_link_libraries(livox_repub PRIVATE OpenMP::OpenMP_CXX)
 endif()
@@ -78,11 +78,11 @@ target_link_libraries(loam_scanRegistration
   nav_msgs
   tf2_ros
   livox_ros_driver2
-  ${PCL_LIBRARIES}
   pcl_conversions::pcl_conversions # ADDED
   ${OpenCV_LIBS}
   Eigen3::Eigen
 )
+target_link_libraries(loam_scanRegistration ${PCL_LIBRARIES})
 if(OpenMP_FOUND)
   target_link_libraries(loam_scanRegistration PRIVATE OpenMP::OpenMP_CXX)
 endif()
@@ -97,11 +97,11 @@ target_link_libraries(loam_scanRegistration_horizon
   nav_msgs
   tf2_ros
   livox_ros_driver2
-  ${PCL_LIBRARIES}
   pcl_conversions::pcl_conversions # ADDED
   ${OpenCV_LIBS}
   Eigen3::Eigen
 )
+target_link_libraries(loam_scanRegistration_horizon ${PCL_LIBRARIES})
 if(OpenMP_FOUND)
   target_link_libraries(loam_scanRegistration_horizon PRIVATE OpenMP::OpenMP_CXX)
 endif()
@@ -116,11 +116,11 @@ target_link_libraries(loam_laserMapping
   nav_msgs
   tf2_ros
   livox_ros_driver2
-  ${PCL_LIBRARIES}
   pcl_conversions::pcl_conversions # ADDED
   ${OpenCV_LIBS}
   Eigen3::Eigen
 )
+target_link_libraries(loam_laserMapping ${PCL_LIBRARIES})
 if(OpenMP_FOUND)
   target_link_libraries(loam_laserMapping PRIVATE OpenMP::OpenMP_CXX)
 endif()
