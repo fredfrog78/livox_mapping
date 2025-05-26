@@ -1,54 +1,158 @@
-cmake_minimum_required(VERSION 2.8.3)
+cmake_minimum_required(VERSION 3.8)
 project(livox_mapping)
 
-SET(CMAKE_BUILD_TYPE "Debug")
+# Set C++ standard to 17
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED True) # Ensure C++17 is used, fail if not available
+set(CMAKE_CXX_EXTENSIONS OFF) # Disable compiler-specific extensions like -std=gnu++17
 
-#set(CMAKE_CXX_COMPILER "/usr/bin/clang++")
-
-#set(CMAKE_C_COMPILER "/usr/bin/clang")
+# Compiler flags - keep relevant ones, remove old std flags
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fexceptions")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -pthread -std=c++0x -std=c++14 -fexceptions -Wno-unused-local-typedefs")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread -fexceptions -Wno-unused-local-typedefs")
 
+# Find OpenMP
 find_package(OpenMP QUIET)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}   ${OpenMP_C_FLAGS}")
+if(OpenMP_FOUND)
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+  # For modern CMake, OpenMP::OpenMP_C and OpenMP::OpenMP_CXX might be available as targets
+  # message(STATUS "OpenMP C flags: ${OpenMP_C_FLAGS}")
+  # message(STATUS "OpenMP CXX flags: ${OpenMP_CXX_FLAGS}")
+else()
+  message(WARNING "OpenMP not found. Proceeding without OpenMP support.")
+endif()
 
-find_package(catkin REQUIRED COMPONENTS
-  geometry_msgs
-  nav_msgs
-  sensor_msgs
-  roscpp
-  rospy
-  std_msgs
-  pcl_ros
-  tf
-  livox_ros_driver
-  )
+# Find ament_cmake and required ROS2 packages
+find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(rclpy REQUIRED) # If you have Python nodes or scripts
+find_package(std_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(tf2_ros REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED) # For tf2::fromMsg, tf2::toMsg with geometry_msgs
+find_package(pcl_ros REQUIRED)
+find_package(livox_ros_driver REQUIRED) # Assuming this is a ROS 2 package
 
-find_package(Eigen3 REQUIRED)
+# Find external libraries
+find_package(Eigen3 REQUIRED CONFIG) # Use CONFIG mode for modern Eigen3
 find_package(PCL REQUIRED)
 find_package(OpenCV REQUIRED)
 
+# Include directories
+# Add 'include' directory if it exists for package-specific headers
 include_directories(
-	${catkin_INCLUDE_DIRS} 
-        ${EIGEN3_INCLUDE_DIR}
-	${PCL_INCLUDE_DIRS})
-
-catkin_package(
-  CATKIN_DEPENDS geometry_msgs nav_msgs roscpp rospy std_msgs
-  DEPENDS EIGEN3 PCL OpenCV
-  INCLUDE_DIRS
+  include 
+  ${Eigen3_INCLUDE_DIRS}
+  ${PCL_INCLUDE_DIRS}
+  ${OpenCV_INCLUDE_DIRS}
 )
 
+# Executables
 add_executable(livox_repub src/livox_repub.cpp)
-target_link_libraries(livox_repub ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBS})
+ament_target_dependencies(livox_repub
+  rclcpp
+  std_msgs
+  sensor_msgs
+  pcl_ros
+  livox_ros_driver
+)
+target_link_libraries(livox_repub 
+  PRIVATE
+  ${PCL_LIBRARIES}
+  ${OpenCV_LIBS}
+  Eigen3::Eigen # Modern Eigen uses imported targets
+)
+if(OpenMP_FOUND)
+  target_link_libraries(livox_repub PRIVATE OpenMP::OpenMP_CXX)
+endif()
 
 add_executable(loam_scanRegistration src/scanRegistration.cpp)
-target_link_libraries(loam_scanRegistration ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBS})
+ament_target_dependencies(loam_scanRegistration
+  rclcpp
+  std_msgs
+  sensor_msgs
+  geometry_msgs
+  nav_msgs
+  tf2_ros
+  pcl_ros
+  livox_ros_driver
+)
+target_link_libraries(loam_scanRegistration
+  PRIVATE
+  ${PCL_LIBRARIES}
+  ${OpenCV_LIBS}
+  Eigen3::Eigen
+)
+if(OpenMP_FOUND)
+  target_link_libraries(loam_scanRegistration PRIVATE OpenMP::OpenMP_CXX)
+endif()
 
 add_executable(loam_scanRegistration_horizon src/scanRegistration_horizon.cpp)
-target_link_libraries(loam_scanRegistration_horizon ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBS})
+ament_target_dependencies(loam_scanRegistration_horizon
+  rclcpp
+  std_msgs
+  sensor_msgs
+  geometry_msgs
+  nav_msgs
+  tf2_ros
+  pcl_ros
+  livox_ros_driver
+)
+target_link_libraries(loam_scanRegistration_horizon
+  PRIVATE
+  ${PCL_LIBRARIES}
+  ${OpenCV_LIBS}
+  Eigen3::Eigen
+)
+if(OpenMP_FOUND)
+  target_link_libraries(loam_scanRegistration_horizon PRIVATE OpenMP::OpenMP_CXX)
+endif()
 
 add_executable(loam_laserMapping src/laserMapping.cpp)
-target_link_libraries(loam_laserMapping ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBS})
+ament_target_dependencies(loam_laserMapping
+  rclcpp
+  std_msgs
+  sensor_msgs
+  geometry_msgs
+  nav_msgs
+  tf2_ros
+  pcl_ros
+  livox_ros_driver
+)
+target_link_libraries(loam_laserMapping
+  PRIVATE
+  ${PCL_LIBRARIES}
+  ${OpenCV_LIBS}
+  Eigen3::Eigen
+)
+if(OpenMP_FOUND)
+  target_link_libraries(loam_laserMapping PRIVATE OpenMP::OpenMP_CXX)
+endif()
 
+# Install executables
+install(TARGETS
+  livox_repub
+  loam_scanRegistration
+  loam_scanRegistration_horizon
+  loam_laserMapping
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+# Install launch files (assuming they are in a 'launch' directory)
+# Create a dummy launch directory for now if it doesn't exist, or remove this if no launch files
+install(DIRECTORY launch/
+  DESTINATION share/${PROJECT_NAME}/launch
+  # Add PATTERN or FILES_MATCHING if you want to exclude/include specific files
+  # OPTIONAL # This makes the install command not fail if the directory doesn't exist
+)
+
+# Install other directories like config or params if they exist
+# install(DIRECTORY config/
+#   DESTINATION share/${PROJECT_NAME}/config
+# )
+
+# ament_package() call (must be called after all targets are defined)
+ament_package()
