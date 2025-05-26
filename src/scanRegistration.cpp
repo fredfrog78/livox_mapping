@@ -236,9 +236,9 @@ private:
       point.intensity = static_cast<float>(scanID_) + (laserCloudIn.points[i].intensity / 10000.0f);
 
 
-      if (!pcl_isfinite(point.x) ||
-          !pcl_isfinite(point.y) ||
-          !pcl_isfinite(point.z)) {
+      if (!std::isfinite(point.x) ||
+          !std::isfinite(point.y) ||
+          !std::isfinite(point.z)) {
         continue;
       }
       Allpoints.push_back(point);
