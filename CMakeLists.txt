@@ -38,7 +38,7 @@ find_package(livox_ros_driver2 REQUIRED) # Assuming this is a ROS 2 package
 
 # Find external libraries
 find_package(Eigen3 REQUIRED CONFIG) # Use CONFIG mode for modern Eigen3
-find_package(PCL REQUIRED)
+find_package(PCL REQUIRED COMPONENTS common io filters features segmentation kdtree sample_consensus)
 find_package(pcl_conversions REQUIRED) # ADDED
 find_package(OpenCV REQUIRED)
 
