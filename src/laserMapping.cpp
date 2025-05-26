@@ -60,7 +60,7 @@
 #include <fstream> // For std::ofstream
 #include <array>   // For std::array
 
-typedef pcl::PointXYZI PointType;
+typedef pcl::PointXYZINormal PointType;
 
 // Utility functions (can be static members or in a utility namespace)
 static double rad2deg(double radians) {
@@ -197,6 +197,8 @@ private:
 
   std::vector<int> laserCloudValidInd_; // Max size 125 based on original code
   std::vector<int> laserCloudSurroundInd_; // Max size 125
+  int laserCloudValidNum_ = 0;
+  int laserCloudSurroundNum_ = 0;
 
   // PCL Point Clouds
   pcl::PointCloud<PointType>::Ptr laserCloudCornerLast_, laserCloudCornerLast_down_;
