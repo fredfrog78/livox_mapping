@@ -79,7 +79,7 @@ ament_target_dependencies(loam_scanRegistration_horizon rclcpp std_msgs sensor_m
 target_link_libraries(loam_scanRegistration_horizon ${EXTERNAL_LIBS})
 
 add_executable(loam_laserMapping src/laserMapping.cpp)
-ament_target_dependencies(loam_laserMapping rclcpp std_msgs sensor_msgs geometry_msgs nav_msgs tf2_ros livox_ros_driver2 pcl_conversions)
+ament_target_dependencies(loam_laserMapping rclcpp std_msgs sensor_msgs geometry_msgs nav_msgs tf2_ros tf2_geometry_msgs livox_ros_driver2 pcl_conversions)
 target_link_libraries(loam_laserMapping ${EXTERNAL_LIBS})
 
 # Install executables
