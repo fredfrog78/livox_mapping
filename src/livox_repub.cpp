@@ -1,6 +1,6 @@
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/point_cloud2.hpp"
-#include "livox_ros_driver/msg/custom_msg.hpp" // Assuming this is the ROS2 path
+#include "livox_ros_driver2/msg/custom_msg.hpp" // Assuming this is the ROS2 path
 #include "pcl_conversions/pcl_conversions.h"
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
@@ -19,13 +19,13 @@ public:
     RCLCPP_INFO(this->get_logger(), "start livox_repub_node. Merging %ld messages.", TO_MERGE_CNT);
 
     pub_pcl_out1_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/livox_pcl0", rclcpp::QoS(100)); // Keep original queue size
-    sub_livox_msg1_ = this->create_subscription<livox_ros_driver::msg::CustomMsg>(
+    sub_livox_msg1_ = this->create_subscription<livox_ros_driver2::msg::CustomMsg>(
         "/livox/lidar", rclcpp::QoS(100), // Keep original queue size
         std::bind(&LivoxRepub::LivoxMsgCbk1, this, std::placeholders::_1));
   }
 
 private:
-  void LivoxMsgCbk1(const livox_ros_driver::msg::CustomMsg::SharedPtr livox_msg_in) {
+  void LivoxMsgCbk1(const livox_ros_driver2::msg::CustomMsg::SharedPtr livox_msg_in) {
     livox_data_.push_back(livox_msg_in);
     if (livox_data_.size() < static_cast<size_t>(TO_MERGE_CNT)) {
       return;
@@ -39,7 +39,7 @@ private:
       // And each point has x, y, z, offset_time, line, reflectivity
       // And CustomMsg has point_num and timebase fields.
       
-      // It's important to check the actual structure of livox_ros_driver::msg::CustomMsg in ROS2
+      // It's important to check the actual structure of livox_ros_driver2::msg::CustomMsg in ROS2
       // The original code implies livox_msg->points.back().offset_time exists.
       // If points is empty, this would be an error.
       if (livox_msg->points.empty()) {
@@ -87,9 +87,9 @@ private:
   }
 
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_pcl_out1_;
-  rclcpp::Subscription<livox_ros_driver::msg::CustomMsg>::SharedPtr sub_livox_msg1_;
+  rclcpp::Subscription<livox_ros_driver2::msg::CustomMsg>::SharedPtr sub_livox_msg1_;
   
-  std::vector<livox_ros_driver::msg::CustomMsg::SharedPtr> livox_data_;
+  std::vector<livox_ros_driver2::msg::CustomMsg::SharedPtr> livox_data_;
   long int TO_MERGE_CNT; // Using long int from parameter
   // constexpr static bool b_dbg_line = false; // Not used in this refactoring
 };

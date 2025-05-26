@@ -34,7 +34,7 @@ find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED) # For tf2::fromMsg, tf2::toMsg with geometry_msgs
 # find_package(pcl_ros REQUIRED) # REMOVED
-find_package(livox_ros_driver REQUIRED) # Assuming this is a ROS 2 package
+find_package(livox_ros_driver2 REQUIRED) # Assuming this is a ROS 2 package
 
 # Find external libraries
 find_package(Eigen3 REQUIRED CONFIG) # Use CONFIG mode for modern Eigen3
@@ -58,7 +58,7 @@ ament_target_dependencies(livox_repub
   std_msgs
   sensor_msgs
   pcl_conversions # ADDED
-  livox_ros_driver
+  livox_ros_driver2
 )
 target_link_libraries(livox_repub 
   PRIVATE
@@ -80,7 +80,7 @@ ament_target_dependencies(loam_scanRegistration
   nav_msgs
   tf2_ros
   pcl_conversions # ADDED
-  livox_ros_driver
+  livox_ros_driver2
 )
 target_link_libraries(loam_scanRegistration
   PRIVATE
@@ -102,7 +102,7 @@ ament_target_dependencies(loam_scanRegistration_horizon
   nav_msgs
   tf2_ros
   pcl_conversions # ADDED
-  livox_ros_driver
+  livox_ros_driver2
 )
 target_link_libraries(loam_scanRegistration_horizon
   PRIVATE
@@ -124,7 +124,7 @@ ament_target_dependencies(loam_laserMapping
   nav_msgs
   tf2_ros
   pcl_conversions # ADDED
-  livox_ros_driver
+  livox_ros_driver2
 )
 target_link_libraries(loam_laserMapping
   PRIVATE
