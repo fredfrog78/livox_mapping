@@ -33,12 +33,13 @@ find_package(nav_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED) # For tf2::fromMsg, tf2::toMsg with geometry_msgs
-find_package(pcl_ros REQUIRED)
+# find_package(pcl_ros REQUIRED) # REMOVED
 find_package(livox_ros_driver REQUIRED) # Assuming this is a ROS 2 package
 
 # Find external libraries
 find_package(Eigen3 REQUIRED CONFIG) # Use CONFIG mode for modern Eigen3
 find_package(PCL REQUIRED)
+find_package(pcl_conversions REQUIRED) # ADDED
 find_package(OpenCV REQUIRED)
 
 # Include directories
@@ -56,12 +57,13 @@ ament_target_dependencies(livox_repub
   rclcpp
   std_msgs
   sensor_msgs
-  pcl_ros
+  pcl_conversions # ADDED
   livox_ros_driver
 )
 target_link_libraries(livox_repub 
   PRIVATE
-  ${PCL_LIBRARIES}
+  PCL::Common PCL::Filters PCL::Features PCL::Segmentation PCL::IO PCL::KdTree PCL::SampleConsensus # ADDED
+  pcl_conversions::pcl_conversions # ADDED
   ${OpenCV_LIBS}
   Eigen3::Eigen # Modern Eigen uses imported targets
 )
@@ -77,12 +79,13 @@ ament_target_dependencies(loam_scanRegistration
   geometry_msgs
   nav_msgs
   tf2_ros
-  pcl_ros
+  pcl_conversions # ADDED
   livox_ros_driver
 )
 target_link_libraries(loam_scanRegistration
   PRIVATE
-  ${PCL_LIBRARIES}
+  PCL::Common PCL::Filters PCL::Features PCL::Segmentation PCL::IO PCL::KdTree PCL::SampleConsensus # ADDED
+  pcl_conversions::pcl_conversions # ADDED
   ${OpenCV_LIBS}
   Eigen3::Eigen
 )
@@ -98,12 +101,13 @@ ament_target_dependencies(loam_scanRegistration_horizon
   geometry_msgs
   nav_msgs
   tf2_ros
-  pcl_ros
+  pcl_conversions # ADDED
   livox_ros_driver
 )
 target_link_libraries(loam_scanRegistration_horizon
   PRIVATE
-  ${PCL_LIBRARIES}
+  PCL::Common PCL::Filters PCL::Features PCL::Segmentation PCL::IO PCL::KdTree PCL::SampleConsensus # ADDED
+  pcl_conversions::pcl_conversions # ADDED
   ${OpenCV_LIBS}
   Eigen3::Eigen
 )
@@ -119,12 +123,13 @@ ament_target_dependencies(loam_laserMapping
   geometry_msgs
   nav_msgs
   tf2_ros
-  pcl_ros
+  pcl_conversions # ADDED
   livox_ros_driver
 )
 target_link_libraries(loam_laserMapping
   PRIVATE
-  ${PCL_LIBRARIES}
+  PCL::Common PCL::Filters PCL::Features PCL::Segmentation PCL::IO PCL::KdTree PCL::SampleConsensus # ADDED
+  pcl_conversions::pcl_conversions # ADDED
   ${OpenCV_LIBS}
   Eigen3::Eigen
 )
