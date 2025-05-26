@@ -51,79 +51,36 @@ include_directories(
   ${OpenCV_INCLUDE_DIRS}
 )
 
+# Define a list for external libraries
+set(EXTERNAL_LIBS ${PCL_LIBRARIES} ${OpenCV_LIBS} Eigen3::Eigen)
+if(OpenMP_FOUND AND OpenMP_CXX_LIBRARIES)
+  list(APPEND EXTERNAL_LIBS ${OpenMP_CXX_LIBRARIES})
+elseif(OpenMP_FOUND AND NOT OpenMP_CXX_LIBRARIES)
+  # Fallback if OpenMP_CXX_LIBRARIES is not set
+  # This might happen if OpenMP is header-only or only provides flags.
+  # CMake sets OpenMP_FOUND if flags are found.
+  # If using modern CMake imported targets for OpenMP (e.g. OpenMP::OpenMP_CXX)
+  # that would be preferred, but for plain linking, we rely on OpenMP_CXX_LIBRARIES.
+  # If it's empty, nothing is added, which is correct.
+  # message(STATUS "OpenMP_CXX_LIBRARIES not set, but OpenMP_FOUND. Flags should be applied.")
+endif()
+
 # Executables
 add_executable(livox_repub src/livox_repub.cpp)
-target_link_libraries(livox_repub 
-  PRIVATE
-  rclcpp
-  std_msgs
-  sensor_msgs
-  livox_ros_driver2
-  pcl_conversions::pcl_conversions # ADDED
-  PCL::Common PCL::Filters PCL::Features PCL::Segmentation PCL::IO PCL::KdTree PCL::SampleConsensus
-  ${OpenCV_LIBS}
-  Eigen3::Eigen # Modern Eigen uses imported targets
-)
-if(OpenMP_FOUND)
-  target_link_libraries(livox_repub PRIVATE OpenMP::OpenMP_CXX)
-endif()
+ament_target_dependencies(livox_repub rclcpp std_msgs sensor_msgs livox_ros_driver2 pcl_conversions)
+target_link_libraries(livox_repub ${EXTERNAL_LIBS})
 
 add_executable(loam_scanRegistration src/scanRegistration.cpp)
-target_link_libraries(loam_scanRegistration
-  PRIVATE
-  rclcpp
-  std_msgs
-  sensor_msgs
-  geometry_msgs
-  nav_msgs
-  tf2_ros
-  livox_ros_driver2
-  pcl_conversions::pcl_conversions # ADDED
-  PCL::Common PCL::Filters PCL::Features PCL::Segmentation PCL::IO PCL::KdTree PCL::SampleConsensus
-  ${OpenCV_LIBS}
-  Eigen3::Eigen
-)
-if(OpenMP_FOUND)
-  target_link_libraries(loam_scanRegistration PRIVATE OpenMP::OpenMP_CXX)
-endif()
+ament_target_dependencies(loam_scanRegistration rclcpp std_msgs sensor_msgs geometry_msgs nav_msgs tf2_ros livox_ros_driver2 pcl_conversions)
+target_link_libraries(loam_scanRegistration ${EXTERNAL_LIBS})
 
 add_executable(loam_scanRegistration_horizon src/scanRegistration_horizon.cpp)
-target_link_libraries(loam_scanRegistration_horizon
-  PRIVATE
-  rclcpp
-  std_msgs
-  sensor_msgs
-  geometry_msgs
-  nav_msgs
-  tf2_ros
-  livox_ros_driver2
-  pcl_conversions::pcl_conversions # ADDED
-  PCL::Common PCL::Filters PCL::Features PCL::Segmentation PCL::IO PCL::KdTree PCL::SampleConsensus
-  ${OpenCV_LIBS}
-  Eigen3::Eigen
-)
-if(OpenMP_FOUND)
-  target_link_libraries(loam_scanRegistration_horizon PRIVATE OpenMP::OpenMP_CXX)
-endif()
+ament_target_dependencies(loam_scanRegistration_horizon rclcpp std_msgs sensor_msgs geometry_msgs nav_msgs tf2_ros livox_ros_driver2 pcl_conversions)
+target_link_libraries(loam_scanRegistration_horizon ${EXTERNAL_LIBS})
 
 add_executable(loam_laserMapping src/laserMapping.cpp)
-target_link_libraries(loam_laserMapping
-  PRIVATE
-  rclcpp
-  std_msgs
-  sensor_msgs
-  geometry_msgs
-  nav_msgs
-  tf2_ros
-  livox_ros_driver2
-  pcl_conversions::pcl_conversions # ADDED
-  PCL::Common PCL::Filters PCL::Features PCL::Segmentation PCL::IO PCL::KdTree PCL::SampleConsensus
-  ${OpenCV_LIBS}
-  Eigen3::Eigen
-)
-if(OpenMP_FOUND)
-  target_link_libraries(loam_laserMapping PRIVATE OpenMP::OpenMP_CXX)
-endif()
+ament_target_dependencies(loam_laserMapping rclcpp std_msgs sensor_msgs geometry_msgs nav_msgs tf2_ros livox_ros_driver2 pcl_conversions)
+target_link_libraries(loam_laserMapping ${EXTERNAL_LIBS})
 
 # Install executables
 install(TARGETS
