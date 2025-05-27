@@ -358,10 +358,12 @@ private:
     // Assuming pi->curvature holds the normalized scan time (0 to 1)
     // Original code used: s = pi->intensity - int(pi->intensity);
     // For Livox, curvature has this role.
-    float s = pi->curvature; // If curvature is not normalized (0-1), it needs to be.
-                             // scanRegistration_horizon uses point.curvature = s*0.1
-                             // So, s = curvature / 0.1 if that's the input.
-                             // Assuming it's already 0-1 from the feature extraction node.
+    // IMPORTANT ASSUMPTION: The input pi->curvature is assumed to be a normalized scan time scaled by 0.1,
+    // as suggested by comments like "scanRegistration_horizon uses point.curvature = s*0.1".
+    // If scanRegistration provides curvature in a different range (e.g., already 0-1, or raw timestamp),
+    // this scaling factor (10.0f) MUST be adjusted accordingly.
+    float s = pi->curvature * 10.0f; 
+    s = std::max(0.0f, std::min(1.0f, s)); // Clamp s to [0,1] for robustness during interpolation.
 
     float rx = (1 - s) * transformLastMapped_[0] + s * transformAftMapped_[0];
     float ry = (1 - s) * transformLastMapped_[1] + s * transformAftMapped_[1];
