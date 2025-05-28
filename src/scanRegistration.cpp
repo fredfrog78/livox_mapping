@@ -48,7 +48,7 @@
 #include <cmath>
 #include <algorithm> // For std::fill, std::floor
 
-typedef pcl::PointXYZI PointType;
+typedef pcl::PointXYZINormal PointType;
 const int MAX_CLOUD_SIZE = 32000; // Maximum cloud size to process
 
 class ScanRegistration : public rclcpp::Node {
@@ -218,22 +218,13 @@ private:
       point.y = laserCloudIn.points[i].y;
       point.z = laserCloudIn.points[i].z;
       
-      // Original scanID calculation based on atan2(y,z) - this seems specific to a sensor FOV or mounting
-      double theta = std::atan2(laserCloudIn.points[i].y, laserCloudIn.points[i].z) / M_PI * 180 + 180;
-      scanID_ = std::floor(theta / 9); // scanID_ is a member now or pass as needed
+      // Directly use intensity and curvature from input (from livox_repub)
+      point.intensity = laserCloudIn.points[i].intensity; 
+      point.curvature = laserCloudIn.points[i].curvature; // This ensures timestamp is preserved
 
-      // Intensity encoding: integer part is scanID, decimal part is original intensity / 10000
-      // The original code used i/cloudSize for some cases, here we use intensity from message
-      // This specific intensity encoding (scanID + original_intensity/10000) should be 
-      // consistent with how `livox_repub` (or whatever publishes this cloud) prepares it.
-      // If the input cloud already has intensity set by livox_repub (line + reflectivity/10000),
-      // then this re-assignment of intensity might be overwriting useful information or making assumptions.
-      // For now, I'm keeping the logic as it was in scanRegistration, which means it expects
-      // the intensity to be the raw sensor intensity value that it can then divide by 10000.
-      // If the input cloud from /livox_pcl0 already contains the line number in integer part
-      // and normalized reflectivity in decimal, then this calculation needs adjustment.
-      // Let's assume laserCloudIn.points[i].intensity is raw intensity.
-      point.intensity = static_cast<float>(scanID_) + (laserCloudIn.points[i].intensity / 10000.0f);
+      // scanID_ calculation removed, as line info is now in intensity and timestamp in curvature
+      // double theta = std::atan2(laserCloudIn.points[i].y, laserCloudIn.points[i].z) / M_PI * 180 + 180;
+      // scanID_ = std::floor(theta / 9); 
 
 
       if (!std::isfinite(point.x) ||
