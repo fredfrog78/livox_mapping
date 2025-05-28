@@ -1,62 +1,58 @@
 import os
 from launch import LaunchDescription
-from launch_ros.actions import Node
-from launch.actions import DeclareLaunchArgument, GroupAction
+from launch.actions import DeclareLaunchArgument, SetParameter
 from launch.substitutions import LaunchConfiguration
-from launch.conditions import IfCondition
+from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
+from launch.conditions import IfCondition
 
 def generate_launch_description():
-    # Get the share directory of the livox_mapping package
-    livox_mapping_share_dir = get_package_share_directory('livox_mapping')
-
-    # Declare the rviz launch argument
+    # Declare launch arguments
     declare_rviz_arg = DeclareLaunchArgument(
         'rviz',
         default_value='true',
-        description='Whether to start RViz austomatically with the launch file.'
+        description='Launch RViz if true'
     )
 
-    # Define the scanRegistration node
-    scan_registration_node = Node(
+    # Set use_sim_time parameter
+    set_use_sim_time = SetParameter(name='use_sim_time', value=False)
+
+    # Node for loam_scanRegistration
+    node_scan_registration = Node(
         package='livox_mapping',
-        executable='loam_scanRegistration', # Assuming executable name from CMakeLists.txt
-        name='scanRegistration',
+        executable='loam_scanRegistration', # Executable name for mid-range LiDAR
+        name='loam_scanRegistration',
         output='screen'
     )
 
-    # Define the laserMapping node
-    laser_mapping_node = Node(
+    # Node for loam_laserMapping
+    node_laser_mapping = Node(
         package='livox_mapping',
-        executable='loam_laserMapping', # Assuming executable name from CMakeLists.txt
-        name='laserMapping',
-        output='screen',
-        parameters=[{
-            'map_file_path': ' ', # Original value was an empty space string
-            'filter_parameter_corner': 0.1,
-            'filter_parameter_surf': 0.2
-        }]
+        executable='loam_laserMapping', 
+        name='loam_laserMapping',
+        output='screen'
     )
 
-    # Define the RViz node configuration
-    rviz_config_file = os.path.join(livox_mapping_share_dir, 'rviz_cfg', 'loam_livox.rviz')
-    
-    rviz_node = Node(
+    # RViz node
+    rviz_config_file = os.path.join(
+        get_package_share_directory('livox_mapping'),
+        'rviz_cfg',
+        'loam_livox.rviz'
+    )
+    node_rviz = Node(
         package='rviz2',
         executable='rviz2',
         name='rviz2',
         arguments=['-d', rviz_config_file],
+        output='screen',
+        # prefix=['nice'],
         condition=IfCondition(LaunchConfiguration('rviz'))
-        # launch_prefix=['nice'] # 'nice' is a linux command, not typically used directly in launch_prefix this way in ROS2. 
-                                 # If niceness is required, it's better handled outside or via system configuration.
     )
 
-    # Create the launch description and populate
-    ld = LaunchDescription()
-
-    ld.add_action(declare_rviz_arg)
-    ld.add_action(scan_registration_node)
-    ld.add_action(laser_mapping_node)
-    ld.add_action(rviz_node) # RViz node itself handles the IfCondition
-
-    return ld
+    return LaunchDescription([
+        declare_rviz_arg,
+        set_use_sim_time,
+        node_scan_registration,
+        node_laser_mapping,
+        node_rviz
+    ])
