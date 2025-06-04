@@ -356,7 +356,7 @@ private:
     // Assuming pi->curvature holds the normalized scan time (0 to 1)
     // Original code used: s = pi->intensity - int(pi->intensity);
     // For Livox, curvature has this role.
-    float s = pi->curvature; // If curvature is not normalized (0-1), it needs to be.
+    float s = 0.0f; // FIXME: Curvature/normalized_time not available from PointXYZI. Set to 0.0 for now.
                              // scanRegistration_horizon uses point.curvature = s*0.1
                              // So, s = curvature / 0.1 if that's the input.
                              // Assuming it's already 0-1 from the feature extraction node.
@@ -655,8 +655,8 @@ private:
     }
 
     // Select map cubes to match against
-    laserCloudValidNum_ = 0;
-    laserCloudSurroundNum_ = 0;
+    int laserCloudValidNum_ = 0;
+    int laserCloudSurroundNum_ = 0;
     laserCloudValidInd_.assign(125, 0); // Max 5x5x5 cubes = 125
     laserCloudSurroundInd_.assign(125, 0);
 
