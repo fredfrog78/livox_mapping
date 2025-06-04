@@ -32,7 +32,7 @@ def generate_launch_description():
     # Node for hypothetical Mid360 driver
     # Replace 'livox_ros2_driver' and 'mid360_node' with actual package and executable
     node_mid360_driver = Node(
-        package='livox_ros2_driver', # Placeholder
+        package='livox_ros_driver2', # Corrected package name
         executable='mid360_node',    # Placeholder
         name='mid360_driver_node',
         output='screen',
