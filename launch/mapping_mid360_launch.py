@@ -1,6 +1,6 @@
 import os
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, SetParameter
+from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
@@ -28,9 +28,6 @@ def generate_launch_description():
         default_value='lidar_frame',
         description='Lidar frame ID'
     )
-
-    # Set use_sim_time parameter
-    set_use_sim_time = SetParameter(name='use_sim_time', value=False)
 
     # Node for hypothetical Mid360 driver
     # Replace 'livox_ros2_driver' and 'mid360_node' with actual package and executable
@@ -95,7 +92,6 @@ def generate_launch_description():
         declare_point_cloud_topic_arg,
         declare_imu_topic_arg,
         declare_frame_id_arg,
-        set_use_sim_time,
         node_mid360_driver, # Add the driver node
         node_scan_registration,
         node_laser_mapping,
