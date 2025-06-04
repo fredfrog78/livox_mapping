@@ -766,11 +766,18 @@ private:
     // t2 = clock();
 
     // Main ICP optimization loop
+    RCLCPP_INFO(this->get_logger(), "Pre-ICP: laserCloudCornerLast_down size: %ld, laserCloudSurfLast_down size: %ld", laserCloudCornerLast_down_->size(), laserCloudSurfLast_down_->size());
     if (laserCloudCornerFromMap_->points.size() > 10 && laserCloudSurfFromMap_->points.size() > 100) {
+      RCLCPP_INFO(this->get_logger(), "ICP Start: laserCloudCornerFromMap size: %ld, laserCloudSurfFromMap size: %ld", laserCloudCornerFromMap_->size(), laserCloudSurfFromMap_->size());
       kdtreeCornerFromMap_->setInputCloud(laserCloudCornerFromMap_);
       kdtreeSurfFromMap_->setInputCloud(laserCloudSurfFromMap_);
 
-      for (int iterCount = 0; iterCount < 5; iterCount++) { // Original has 20 iterations
+      float deltaR_final = 0.0f; // For logging after loop
+      float deltaT_final = 0.0f; // For logging after loop
+      int actualIterCount = 0;
+
+      for (int iterCount = 0; iterCount < 5; iterCount++) {
+        actualIterCount = iterCount + 1;
         laserCloudOri_->clear();
         coeffSel_->clear();
         PointType pointOri, pointSel, coeff;
@@ -869,6 +876,7 @@ private:
         
         // Solve for transformation increment
         int laserCloudSelNum = laserCloudOri_->points.size();
+        RCLCPP_INFO(this->get_logger(), "ICP Iter %d: laserCloudSelNum: %d", iterCount, laserCloudSelNum);
         if (laserCloudSelNum < 50) continue; // Need enough constraints
 
         cv::Mat matA(laserCloudSelNum, 6, CV_32F, cv::Scalar::all(0));
@@ -937,11 +945,21 @@ private:
         transformTobeMapped_[4] += matX.at<float>(4,0);
         transformTobeMapped_[5] += matX.at<float>(5,0);
 
-        float deltaR = sqrt(pow(rad2deg(matX.at<float>(0,0)),2) + pow(rad2deg(matX.at<float>(1,0)),2) + pow(rad2deg(matX.at<float>(2,0)),2));
-        float deltaT = sqrt(pow(matX.at<float>(3,0)*100,2) + pow(matX.at<float>(4,0)*100,2) + pow(matX.at<float>(5,0)*100,2));
-        if (deltaR < 0.05 && deltaT < 0.05) break; // Converged
+        // The existing deltaR and deltaT are fine for the break condition
+        deltaR_final = sqrt(pow(rad2deg(matX.at<float>(0,0)),2) + pow(rad2deg(matX.at<float>(1,0)),2) + pow(rad2deg(matX.at<float>(2,0)),2));
+        deltaT_final = sqrt(pow(matX.at<float>(3,0)*100,2) + pow(matX.at<float>(4,0)*100,2) + pow(matX.at<float>(5,0)*100,2));
+        if (deltaR_final < 0.05 && deltaT_final < 0.05) break;
       }
+      RCLCPP_INFO(this->get_logger(), "ICP End: Ran %d iterations. Final deltaR: %f, deltaT: %f", actualIterCount, deltaR_final, deltaT_final);
+      RCLCPP_INFO(this->get_logger(), "ICP End: transformTobeMapped_ (before update): [%.3f, %.3f, %.3f, %.3f, %.3f, %.3f]", transformTobeMapped_[0], transformTobeMapped_[1], transformTobeMapped_[2], transformTobeMapped_[3], transformTobeMapped_[4], transformTobeMapped_[5]);
       transformUpdate(); // transformAftMapped_ = transformTobeMapped_
+      RCLCPP_INFO(this->get_logger(), "ICP End: transformAftMapped_ (after update): [%.3f, %.3f, %.3f, %.3f, %.3f, %.3f]", transformAftMapped_[0], transformAftMapped_[1], transformAftMapped_[2], transformAftMapped_[3], transformAftMapped_[4], transformAftMapped_[5]);
+    } else {
+      RCLCPP_INFO(this->get_logger(), "ICP SKIPPED: Not enough points in map. Corner: %ld, Surf: %ld", laserCloudCornerFromMap_->points.size(), laserCloudSurfFromMap_->points.size());
+      // If ICP is skipped, still log the transforms to see if they change due to prediction alone
+      RCLCPP_INFO(this->get_logger(), "ICP SKIPPED: transformTobeMapped_ (before update): [%.3f, %.3f, %.3f, %.3f, %.3f, %.3f]", transformTobeMapped_[0], transformTobeMapped_[1], transformTobeMapped_[2], transformTobeMapped_[3], transformTobeMapped_[4], transformTobeMapped_[5]);
+      transformUpdate();
+      RCLCPP_INFO(this->get_logger(), "ICP SKIPPED: transformAftMapped_ (after update): [%.3f, %.3f, %.3f, %.3f, %.3f, %.3f]", transformAftMapped_[0], transformAftMapped_[1], transformAftMapped_[2], transformAftMapped_[3], transformAftMapped_[4], transformAftMapped_[5]);
     }
     // t3 = clock();
 
