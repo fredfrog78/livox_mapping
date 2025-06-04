@@ -104,6 +104,7 @@ ament_target_dependencies(loam_scanRegistration_horizon
   geometry_msgs
   nav_msgs
   tf2_ros
+  tf2_geometry_msgs # ADDED
   pcl_conversions # ADDED
   livox_ros_driver2
 )
