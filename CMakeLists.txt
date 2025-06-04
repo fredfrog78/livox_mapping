@@ -38,7 +38,7 @@ find_package(tf2_geometry_msgs REQUIRED) # For tf2::fromMsg, tf2::toMsg with geo
 # Find external libraries
 # PCL Setup Block (modified for older PCL style)
 find_package(PCL REQUIRED)
-message(STATUS "PCL_FOUND: ${PCL_FOUND}")
+message(WARNING "PCL_FOUND (diag): ${PCL_FOUND}")
 message(STATUS "PCL_INCLUDE_DIRS: ${PCL_INCLUDE_DIRS}")
 message(STATUS "PCL_LIBRARIES: ${PCL_LIBRARIES}")
 message(STATUS "PCL_VERSION: ${PCL_VERSION}")
