@@ -34,10 +34,9 @@ find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED) # For tf2::fromMsg, tf2::toMsg with geometry_msgs
 # find_package(pcl_ros REQUIRED) # REMOVED
-find_package(livox_ros_driver2 REQUIRED) # Assuming this is a ROS 2 package
 
 # Find external libraries
-find_package(Eigen3 REQUIRED CONFIG) # Use CONFIG mode for modern Eigen3
+# PCL Setup Block (moved here)
 set(PCL_COMPONENTS Common Filters Features Segmentation IO KdTree SampleConsensus)
 find_package(PCL REQUIRED COMPONENTS ${PCL_COMPONENTS})
 message(STATUS "PCL_FOUND: ${PCL_FOUND}")
@@ -73,7 +72,10 @@ endif()
 # You can add more checks for other components if needed
 add_library(project_pcl_libs INTERFACE)
 target_link_libraries(project_pcl_libs INTERFACE PCL::${PCL_COMPONENTS})
+
+find_package(Eigen3 REQUIRED CONFIG) # Use CONFIG mode for modern Eigen3
 find_package(pcl_conversions REQUIRED) # ADDED
+find_package(livox_ros_driver2 REQUIRED) # Assuming this is a ROS 2 package
 find_package(OpenCV REQUIRED)
 
 # Include directories
