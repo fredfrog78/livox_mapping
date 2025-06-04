@@ -128,6 +128,7 @@ ament_target_dependencies(loam_laserMapping
   pcl_conversions # ADDED
   livox_ros_driver2
 )
+target_include_directories(loam_laserMapping PRIVATE ${tf2_geometry_msgs_INCLUDE_DIRS})
 target_link_libraries(loam_laserMapping
   ${PCL_LIBRARIES}
   ${OpenCV_LIBS}
