@@ -61,14 +61,13 @@ ament_target_dependencies(livox_repub
   livox_ros_driver2
 )
 target_link_libraries(livox_repub 
-  PRIVATE
   PCL::Common PCL::Filters PCL::Features PCL::Segmentation PCL::IO PCL::KdTree PCL::SampleConsensus # ADDED
   pcl_conversions::pcl_conversions # ADDED
   ${OpenCV_LIBS}
   Eigen3::Eigen # Modern Eigen uses imported targets
 )
 if(OpenMP_FOUND)
-  target_link_libraries(livox_repub PRIVATE OpenMP::OpenMP_CXX)
+  target_link_libraries(livox_repub OpenMP::OpenMP_CXX)
 endif()
 
 add_executable(loam_scanRegistration src/scanRegistration.cpp)
@@ -83,14 +82,13 @@ ament_target_dependencies(loam_scanRegistration
   livox_ros_driver2
 )
 target_link_libraries(loam_scanRegistration
-  PRIVATE
   PCL::Common PCL::Filters PCL::Features PCL::Segmentation PCL::IO PCL::KdTree PCL::SampleConsensus # ADDED
   pcl_conversions::pcl_conversions # ADDED
   ${OpenCV_LIBS}
   Eigen3::Eigen
 )
 if(OpenMP_FOUND)
-  target_link_libraries(loam_scanRegistration PRIVATE OpenMP::OpenMP_CXX)
+  target_link_libraries(loam_scanRegistration OpenMP::OpenMP_CXX)
 endif()
 
 add_executable(loam_scanRegistration_horizon src/scanRegistration_horizon.cpp)
@@ -105,14 +103,13 @@ ament_target_dependencies(loam_scanRegistration_horizon
   livox_ros_driver2
 )
 target_link_libraries(loam_scanRegistration_horizon
-  PRIVATE
   PCL::Common PCL::Filters PCL::Features PCL::Segmentation PCL::IO PCL::KdTree PCL::SampleConsensus # ADDED
   pcl_conversions::pcl_conversions # ADDED
   ${OpenCV_LIBS}
   Eigen3::Eigen
 )
 if(OpenMP_FOUND)
-  target_link_libraries(loam_scanRegistration_horizon PRIVATE OpenMP::OpenMP_CXX)
+  target_link_libraries(loam_scanRegistration_horizon OpenMP::OpenMP_CXX)
 endif()
 
 add_executable(loam_laserMapping src/laserMapping.cpp)
@@ -127,14 +124,13 @@ ament_target_dependencies(loam_laserMapping
   livox_ros_driver2
 )
 target_link_libraries(loam_laserMapping
-  PRIVATE
   PCL::Common PCL::Filters PCL::Features PCL::Segmentation PCL::IO PCL::KdTree PCL::SampleConsensus # ADDED
   pcl_conversions::pcl_conversions # ADDED
   ${OpenCV_LIBS}
   Eigen3::Eigen
 )
 if(OpenMP_FOUND)
-  target_link_libraries(loam_laserMapping PRIVATE OpenMP::OpenMP_CXX)
+  target_link_libraries(loam_laserMapping OpenMP::OpenMP_CXX)
 endif()
 
 # Install executables
