@@ -39,9 +39,9 @@ find_package(tf2_geometry_msgs REQUIRED) # For tf2::fromMsg, tf2::toMsg with geo
 # PCL Setup Block (modified for older PCL style)
 find_package(PCL REQUIRED)
 message(WARNING "PCL_FOUND (diag): ${PCL_FOUND}")
-message(STATUS "PCL_INCLUDE_DIRS: ${PCL_INCLUDE_DIRS}")
-message(STATUS "PCL_LIBRARIES: ${PCL_LIBRARIES}")
-message(STATUS "PCL_VERSION: ${PCL_VERSION}")
+message(WARNING "PCL_INCLUDE_DIRS (diag): ${PCL_INCLUDE_DIRS}")
+message(WARNING "PCL_LIBRARIES (diag): ${PCL_LIBRARIES}")
+message(WARNING "PCL_VERSION (diag): ${PCL_VERSION}")
 
 find_package(Eigen3 REQUIRED CONFIG) # Use CONFIG mode for modern Eigen3
 find_package(pcl_conversions REQUIRED) # ADDED
