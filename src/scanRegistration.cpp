@@ -38,6 +38,7 @@
 #include "pcl_conversions/pcl_conversions.h"
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
+#include <pcl/common/point_tests.h>
 // #include <pcl/filters/voxel_grid.h> // Not used in the provided snippet
 // #include <pcl/kdtree/kdtree_flann.h> // Not used in the provided snippet
 
