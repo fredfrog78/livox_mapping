@@ -40,6 +40,37 @@ find_package(livox_ros_driver2 REQUIRED) # Assuming this is a ROS 2 package
 find_package(Eigen3 REQUIRED CONFIG) # Use CONFIG mode for modern Eigen3
 set(PCL_COMPONENTS Common Filters Features Segmentation IO KdTree SampleConsensus)
 find_package(PCL REQUIRED COMPONENTS ${PCL_COMPONENTS})
+message(STATUS "PCL_FOUND: ${PCL_FOUND}")
+message(STATUS "PCL_INCLUDE_DIRS: ${PCL_INCLUDE_DIRS}")
+message(STATUS "PCL_LIBRARIES: ${PCL_LIBRARIES}") # Older variable
+message(STATUS "PCL_COMMON_LIBRARIES: ${PCL_COMMON_LIBRARIES}") # Example of component-specific old variable
+message(STATUS "PCL_IO_LIBRARIES: ${PCL_IO_LIBRARIES}")       # Example of component-specific old variable
+
+if(TARGET PCL::Common)
+  message(STATUS "DEBUG: TARGET PCL::Common EXISTS")
+else()
+  message(STATUS "DEBUG: TARGET PCL::Common DOES NOT EXIST")
+endif()
+
+if(TARGET PCL::Filters)
+  message(STATUS "DEBUG: TARGET PCL::Filters EXISTS")
+else()
+  message(STATUS "DEBUG: TARGET PCL::Filters DOES NOT EXIST")
+endif()
+
+if(TARGET PCL::IO)
+  message(STATUS "DEBUG: TARGET PCL::IO EXISTS")
+else()
+  message(STATUS "DEBUG: TARGET PCL::IO DOES NOT EXIST")
+endif()
+
+if(TARGET PCL::pcl_common) # Some systems might use lowercase target names without namespace
+  message(STATUS "DEBUG: TARGET PCL::pcl_common EXISTS")
+else()
+  message(STATUS "DEBUG: TARGET PCL::pcl_common DOES NOT EXIST")
+endif()
+
+# You can add more checks for other components if needed
 add_library(project_pcl_libs INTERFACE)
 target_link_libraries(project_pcl_libs INTERFACE PCL::${PCL_COMPONENTS})
 find_package(pcl_conversions REQUIRED) # ADDED
