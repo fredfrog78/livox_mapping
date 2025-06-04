@@ -186,9 +186,9 @@ Visualization Manager:
           Axis: Z
           Channel Name: intensity
           Class: rviz/PointCloud2
-          Color: 255; 255; 255
+          Color: 0; 255; 0
           Color Transformer: FlatColor
-          Decay Time: 0
+          Decay Time: 5.0
           Enabled: true
           Invert Rainbow: false
           Max Color: 255; 255; 255
@@ -202,7 +202,7 @@ Visualization Manager:
           Size (Pixels): 3
           Size (m): 0.0500000007
           Style: Points
-          Topic: /velodyne_cloud_registered
+          Topic: /laser_cloud_surround
           Unreliable: false
           Use Fixed Frame: true
           Use rainbow: true
