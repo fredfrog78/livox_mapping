@@ -770,7 +770,7 @@ private:
       kdtreeCornerFromMap_->setInputCloud(laserCloudCornerFromMap_);
       kdtreeSurfFromMap_->setInputCloud(laserCloudSurfFromMap_);
 
-      for (int iterCount = 0; iterCount < 10; iterCount++) { // Original has 20 iterations
+      for (int iterCount = 0; iterCount < 5; iterCount++) { // Original has 20 iterations
         laserCloudOri_->clear();
         coeffSel_->clear();
         PointType pointOri, pointSel, coeff;
@@ -1042,7 +1042,7 @@ private:
     pubOdomAftMapped_->publish(odomAftMapped_);
 
     geometry_msgs::msg::TransformStamped tfStamped;
-    tfStamped.header.stamp = currentTime;
+    tfStamped.header.stamp = this->get_clock()->now();
     tfStamped.header.frame_id = "camera_init"; // map frame
     tfStamped.child_frame_id = "aft_mapped";  // robot frame
     tfStamped.transform.translation.x = transformAftMapped_[3];
