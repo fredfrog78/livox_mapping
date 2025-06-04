@@ -71,6 +71,12 @@ public:
         "/livox_pcl0", rclcpp::QoS(100), // Original queue size was 100
         std::bind(&ScanRegistration::laserCloudHandler, this, std::placeholders::_1));
 
+    RCLCPP_INFO(this->get_logger(), "--- ScanRegistration Node ---");
+    if (subLaserCloud_) {
+        RCLCPP_INFO(this->get_logger(), "Subscribed to PointCloud2 on topic: %s", subLaserCloud_->get_topic_name());
+    }
+    RCLCPP_INFO(this->get_logger(), "-----------------------------");
+
     // subLaserCloud_for_hk_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
     //     "/livox/lidar", 2, std::bind(&ScanRegistration::laserCloudHandler_temp, this, std::placeholders::_1)); // For hkmars_data (commented out)
 

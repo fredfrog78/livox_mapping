@@ -99,6 +99,12 @@ public:
     this->get_parameter("filter_parameter_surf", filter_param_surf_);
     RCLCPP_INFO(this->get_logger(), "Filter parameter surf: %f", filter_param_surf_);
 
+    RCLCPP_INFO(this->get_logger(), "--- LaserMapping Node Parameters ---");
+    RCLCPP_INFO(this->get_logger(), "map_file_path: %s", map_file_path_.c_str());
+    RCLCPP_INFO(this->get_logger(), "filter_parameter_corner: %f", filter_param_corner_);
+    RCLCPP_INFO(this->get_logger(), "filter_parameter_surf: %f", filter_param_surf_);
+    RCLCPP_INFO(this->get_logger(), "------------------------------------");
+
     // Initialize PCL shared pointers
     laserCloudCornerLast_ = std::make_shared<pcl::PointCloud<PointType>>();
     laserCloudCornerLast_down_ = std::make_shared<pcl::PointCloud<PointType>>();
@@ -165,6 +171,18 @@ public:
         "/laser_cloud_flat", rclcpp::QoS(100), std::bind(&LaserMapping::laserCloudSurfLastHandler, this, std::placeholders::_1));
     subLaserCloudFullRes_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
         "/livox_cloud", rclcpp::QoS(100), std::bind(&LaserMapping::laserCloudFullResHandler, this, std::placeholders::_1));
+
+    RCLCPP_INFO(this->get_logger(), "--- LaserMapping Subscribed Topics ---");
+    if (subLaserCloudCornerLast_) {
+        RCLCPP_INFO(this->get_logger(), "Subscribed to corner points on topic: %s", subLaserCloudCornerLast_->get_topic_name());
+    }
+    if (subLaserCloudSurfLast_) {
+        RCLCPP_INFO(this->get_logger(), "Subscribed to surface points on topic: %s", subLaserCloudSurfLast_->get_topic_name());
+    }
+    if (subLaserCloudFullRes_) {
+        RCLCPP_INFO(this->get_logger(), "Subscribed to full resolution cloud on topic: %s", subLaserCloudFullRes_->get_topic_name());
+    }
+    RCLCPP_INFO(this->get_logger(), "------------------------------------");
 
     // TF Broadcaster
     tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(this);
