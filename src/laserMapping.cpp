@@ -440,6 +440,10 @@ private:
 
   // Callbacks
   void laserCloudCornerLastHandler(const sensor_msgs::msg::PointCloud2::ConstSharedPtr msg) {
+    if (msg->data.empty()) {
+      RCLCPP_WARN(this->get_logger(), "Received empty PointCloud2 message on topic %s. Skipping conversion.", subLaserCloudCornerLast_->get_topic_name());
+      return;
+    }
     timeLaserCloudCornerLast_ = msg->header.stamp.sec + msg->header.stamp.nanosec * 1e-9;
     laserCloudCornerLast_->clear();
     pcl::fromROSMsg(*msg, *laserCloudCornerLast_);
@@ -447,6 +451,10 @@ private:
   }
 
   void laserCloudSurfLastHandler(const sensor_msgs::msg::PointCloud2::ConstSharedPtr msg) {
+    if (msg->data.empty()) {
+      RCLCPP_WARN(this->get_logger(), "Received empty PointCloud2 message on topic %s. Skipping conversion.", subLaserCloudSurfLast_->get_topic_name());
+      return;
+    }
     timeLaserCloudSurfLast_ = msg->header.stamp.sec + msg->header.stamp.nanosec * 1e-9;
     laserCloudSurfLast_->clear();
     pcl::fromROSMsg(*msg, *laserCloudSurfLast_);
@@ -454,6 +462,10 @@ private:
   }
 
   void laserCloudFullResHandler(const sensor_msgs::msg::PointCloud2::ConstSharedPtr msg) {
+    if (msg->data.empty()) {
+      RCLCPP_WARN(this->get_logger(), "Received empty PointCloud2 message on topic %s. Skipping conversion.", subLaserCloudFullRes_->get_topic_name());
+      return;
+    }
     timeLaserCloudFullRes_ = msg->header.stamp.sec + msg->header.stamp.nanosec * 1e-9;
     laserCloudFullRes_->clear();
     // laserCloudFullResColor_->clear(); // Cleared before use in loop
