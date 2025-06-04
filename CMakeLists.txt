@@ -38,7 +38,12 @@ find_package(livox_ros_driver2 REQUIRED) # Assuming this is a ROS 2 package
 
 # Find external libraries
 find_package(Eigen3 REQUIRED CONFIG) # Use CONFIG mode for modern Eigen3
+set(PCL_COMPONENTS Common Filters Features Segmentation IO KdTree SampleConsensus)
 find_package(PCL REQUIRED)
+# If PCL::${PCL_COMPONENTS} targets are not found, try:
+# find_package(PCL REQUIRED COMPONENTS ${PCL_COMPONENTS})
+add_library(project_pcl_libs INTERFACE)
+target_link_libraries(project_pcl_libs INTERFACE PCL::${PCL_COMPONENTS})
 find_package(pcl_conversions REQUIRED) # ADDED
 find_package(OpenCV REQUIRED)
 
@@ -61,7 +66,7 @@ ament_target_dependencies(livox_repub
   livox_ros_driver2
 )
 target_link_libraries(livox_repub 
-  PCL::Common PCL::Filters PCL::Features PCL::Segmentation PCL::IO PCL::KdTree PCL::SampleConsensus # ADDED
+  project_pcl_libs
   pcl_conversions::pcl_conversions # ADDED
   ${OpenCV_LIBS}
   Eigen3::Eigen # Modern Eigen uses imported targets
@@ -82,7 +87,7 @@ ament_target_dependencies(loam_scanRegistration
   livox_ros_driver2
 )
 target_link_libraries(loam_scanRegistration
-  PCL::Common PCL::Filters PCL::Features PCL::Segmentation PCL::IO PCL::KdTree PCL::SampleConsensus # ADDED
+  project_pcl_libs
   pcl_conversions::pcl_conversions # ADDED
   ${OpenCV_LIBS}
   Eigen3::Eigen
@@ -103,7 +108,7 @@ ament_target_dependencies(loam_scanRegistration_horizon
   livox_ros_driver2
 )
 target_link_libraries(loam_scanRegistration_horizon
-  PCL::Common PCL::Filters PCL::Features PCL::Segmentation PCL::IO PCL::KdTree PCL::SampleConsensus # ADDED
+  project_pcl_libs
   pcl_conversions::pcl_conversions # ADDED
   ${OpenCV_LIBS}
   Eigen3::Eigen
@@ -124,7 +129,7 @@ ament_target_dependencies(loam_laserMapping
   livox_ros_driver2
 )
 target_link_libraries(loam_laserMapping
-  PCL::Common PCL::Filters PCL::Features PCL::Segmentation PCL::IO PCL::KdTree PCL::SampleConsensus # ADDED
+  project_pcl_libs
   pcl_conversions::pcl_conversions # ADDED
   ${OpenCV_LIBS}
   Eigen3::Eigen
