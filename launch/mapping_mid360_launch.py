@@ -36,7 +36,7 @@ def generate_launch_description():
         name='loam_scanRegistration',
         output='screen',
         remappings=[
-            ('/livox/lidar', LaunchConfiguration('point_cloud_topic')),
+            ('/livox_pcl0', LaunchConfiguration('point_cloud_topic')), # Changed '/livox/lidar' to '/livox_pcl0'
             ('/livox/imu', LaunchConfiguration('imu_topic'))
         ]
     )
