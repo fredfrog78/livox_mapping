@@ -770,7 +770,7 @@ private:
       kdtreeCornerFromMap_->setInputCloud(laserCloudCornerFromMap_);
       kdtreeSurfFromMap_->setInputCloud(laserCloudSurfFromMap_);
 
-      for (int iterCount = 0; iterCount < 20; iterCount++) { // Original has 20 iterations
+      for (int iterCount = 0; iterCount < 10; iterCount++) { // Original has 20 iterations
         laserCloudOri_->clear();
         coeffSel_->clear();
         PointType pointOri, pointSel, coeff;
