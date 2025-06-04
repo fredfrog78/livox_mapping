@@ -36,42 +36,12 @@ find_package(tf2_geometry_msgs REQUIRED) # For tf2::fromMsg, tf2::toMsg with geo
 # find_package(pcl_ros REQUIRED) # REMOVED
 
 # Find external libraries
-# PCL Setup Block (moved here)
-set(PCL_COMPONENTS Common Filters Features Segmentation IO KdTree SampleConsensus)
-find_package(PCL REQUIRED COMPONENTS ${PCL_COMPONENTS})
+# PCL Setup Block (modified for older PCL style)
+find_package(PCL REQUIRED)
 message(STATUS "PCL_FOUND: ${PCL_FOUND}")
 message(STATUS "PCL_INCLUDE_DIRS: ${PCL_INCLUDE_DIRS}")
-message(STATUS "PCL_LIBRARIES: ${PCL_LIBRARIES}") # Older variable
-message(STATUS "PCL_COMMON_LIBRARIES: ${PCL_COMMON_LIBRARIES}") # Example of component-specific old variable
-message(STATUS "PCL_IO_LIBRARIES: ${PCL_IO_LIBRARIES}")       # Example of component-specific old variable
-
-if(TARGET PCL::Common)
-  message(STATUS "DEBUG: TARGET PCL::Common EXISTS")
-else()
-  message(STATUS "DEBUG: TARGET PCL::Common DOES NOT EXIST")
-endif()
-
-if(TARGET PCL::Filters)
-  message(STATUS "DEBUG: TARGET PCL::Filters EXISTS")
-else()
-  message(STATUS "DEBUG: TARGET PCL::Filters DOES NOT EXIST")
-endif()
-
-if(TARGET PCL::IO)
-  message(STATUS "DEBUG: TARGET PCL::IO EXISTS")
-else()
-  message(STATUS "DEBUG: TARGET PCL::IO DOES NOT EXIST")
-endif()
-
-if(TARGET PCL::pcl_common) # Some systems might use lowercase target names without namespace
-  message(STATUS "DEBUG: TARGET PCL::pcl_common EXISTS")
-else()
-  message(STATUS "DEBUG: TARGET PCL::pcl_common DOES NOT EXIST")
-endif()
-
-# You can add more checks for other components if needed
-add_library(project_pcl_libs INTERFACE)
-target_link_libraries(project_pcl_libs INTERFACE PCL::${PCL_COMPONENTS})
+message(STATUS "PCL_LIBRARIES: ${PCL_LIBRARIES}")
+message(STATUS "PCL_VERSION: ${PCL_VERSION}")
 
 find_package(Eigen3 REQUIRED CONFIG) # Use CONFIG mode for modern Eigen3
 find_package(pcl_conversions REQUIRED) # ADDED
@@ -97,7 +67,7 @@ ament_target_dependencies(livox_repub
   livox_ros_driver2
 )
 target_link_libraries(livox_repub 
-  project_pcl_libs
+  ${PCL_LIBRARIES}
   ${OpenCV_LIBS}
   Eigen3::Eigen # Modern Eigen uses imported targets
 )
@@ -117,7 +87,7 @@ ament_target_dependencies(loam_scanRegistration
   livox_ros_driver2
 )
 target_link_libraries(loam_scanRegistration
-  project_pcl_libs
+  ${PCL_LIBRARIES}
   ${OpenCV_LIBS}
   Eigen3::Eigen
 )
@@ -137,7 +107,7 @@ ament_target_dependencies(loam_scanRegistration_horizon
   livox_ros_driver2
 )
 target_link_libraries(loam_scanRegistration_horizon
-  project_pcl_libs
+  ${PCL_LIBRARIES}
   ${OpenCV_LIBS}
   Eigen3::Eigen
 )
@@ -157,7 +127,7 @@ ament_target_dependencies(loam_laserMapping
   livox_ros_driver2
 )
 target_link_libraries(loam_laserMapping
-  project_pcl_libs
+  ${PCL_LIBRARIES}
   ${OpenCV_LIBS}
   Eigen3::Eigen
 )
