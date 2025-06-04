@@ -29,27 +29,6 @@ def generate_launch_description():
         description='Lidar frame ID'
     )
 
-    # Node for hypothetical Mid360 driver
-    # Replace 'livox_ros2_driver' and 'mid360_node' with actual package and executable
-    node_mid360_driver = Node(
-        package='livox_ros_driver2', # Corrected package name
-        executable='mid360_node',    # Placeholder
-        name='mid360_driver_node',
-        output='screen',
-        parameters=[
-            {'frame_id': LaunchConfiguration('frame_id')},
-            # Assuming the driver uses these parameter names to set its output topics
-            {'livox_lidar_frame_id': LaunchConfiguration('frame_id')}, # Common for livox driver
-            {'publish_freq': 10.0}, # Example parameter
-            # The driver itself would publish to topics specified by its internal params or command-line args.
-            # For this example, we assume it's configured to publish to the topics
-            # defined by point_cloud_topic and imu_topic launch arguments.
-            # If the driver has parameters like "output_pointcloud_topic", they would be set here:
-            # {'output_pointcloud_topic': LaunchConfiguration('point_cloud_topic')},
-            # {'output_imu_topic': LaunchConfiguration('imu_topic')},
-        ]
-    )
-
     # Node for loam_scanRegistration
     node_scan_registration = Node(
         package='livox_mapping',
@@ -92,7 +71,6 @@ def generate_launch_description():
         declare_point_cloud_topic_arg,
         declare_imu_topic_arg,
         declare_frame_id_arg,
-        node_mid360_driver, # Add the driver node
         node_scan_registration,
         node_laser_mapping,
         node_rviz
