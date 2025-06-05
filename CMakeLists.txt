@@ -33,6 +33,7 @@ find_package(nav_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED) # For tf2::fromMsg, tf2::toMsg with geometry_msgs
+find_package(visualization_msgs REQUIRED)
 # find_package(pcl_ros REQUIRED) # REMOVED
 
 # Find external libraries
@@ -127,6 +128,7 @@ ament_target_dependencies(loam_laserMapping
   tf2_ros
   pcl_conversions # ADDED
   livox_ros_driver2
+  visualization_msgs
 )
 target_include_directories(loam_laserMapping PRIVATE ${tf2_geometry_msgs_INCLUDE_DIRS})
 target_link_libraries(loam_laserMapping
