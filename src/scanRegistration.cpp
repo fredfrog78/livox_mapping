@@ -512,21 +512,21 @@ private:
     }
 
     for (int i = 0; i < cloudSize; i++) {
-      // The intensity encoding was done earlier based on scanID and raw intensity.
-      // The original code had a line here:
-      // laserCloud->points[i].intensity = double(CloudFeatureFlag_[i]) / 10000;
-      // This would overwrite the scanID/timestamp info. It seems this was for debugging.
-      // If this intensity is crucial for later nodes, it needs careful consideration.
-      // For now, I am keeping the intensity as set in the first loop (scanID + fractional part).
-
-      if (CloudFeatureFlag_[i] == 1) { // surf point
-        surfPointsFlat.push_back(laserCloud->points[i]);
+      // Points with CloudFeatureFlag_[i] == 250 (outliers) are ignored.
+      if (CloudFeatureFlag_[i] == 250) {
         continue;
       }
-      if (CloudFeatureFlag_[i] == 100 || CloudFeatureFlag_[i] == 150) { // break point or surf-surf corner
+
+      if (CloudFeatureFlag_[i] == 100 || CloudFeatureFlag_[i] == 150) {
+        // break point or surf-surf corner
         cornerPointsSharp.push_back(laserCloud->points[i]);
-      } 
-      // Points with CloudFeatureFlag_[i] == 0 (regular points) or 250 (outliers) are not added to feature clouds.
+      } else if (CloudFeatureFlag_[i] == 1 || CloudFeatureFlag_[i] == 0) {
+        // Original surf points (flag 1) AND 'regular' points (flag 0)
+        surfPointsFlat.push_back(laserCloud->points[i]);
+      }
+      // Note: This structure ensures that if a point somehow ended up with a flag like 100
+      // AND would also qualify for flag 0 (which shouldn't happen with current logic upstream),
+      // it's treated as a corner. Outliers are explicitly skipped first.
     }
 
     RCLCPP_DEBUG(this->get_logger(), "ALL point: %d, outliers: %d", cloudSize, debugnum1);
