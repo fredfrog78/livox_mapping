@@ -41,6 +41,8 @@
 #include "tf2/LinearMath/Matrix3x3.h"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp" // For tf2::toMsg
 #include "geometry_msgs/msg/transform_stamped.hpp"
+#include "visualization_msgs/msg/marker_array.hpp"
+#include <geometry_msgs/msg/point.hpp>
 
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/point_cloud.h>
@@ -87,6 +89,14 @@ public:
     RCLCPP_INFO(this->get_logger(), "Initializing LaserMapping Node");
 
     // Declare and get parameters
+    this->declare_parameter<bool>("publish_icp_correspondence_markers", false);
+    this->get_parameter("publish_icp_correspondence_markers", publish_icp_correspondence_markers_);
+    RCLCPP_INFO(this->get_logger(), "Publish ICP correspondence markers: %s", publish_icp_correspondence_markers_ ? "true" : "false");
+
+    this->declare_parameter<bool>("publish_selected_feature_markers", false);
+    this->get_parameter("publish_selected_feature_markers", publish_selected_feature_markers_);
+    RCLCPP_INFO(this->get_logger(), "Publish selected feature markers: %s", publish_selected_feature_markers_ ? "true" : "false");
+
     this->declare_parameter<std::string>("map_file_path", "map_data");
     this->get_parameter("map_file_path", map_file_path_);
     RCLCPP_INFO(this->get_logger(), "Map file path: %s", map_file_path_.c_str());
@@ -160,6 +170,8 @@ public:
     pubLaserCloudSurroundCorner_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/laser_cloud_surround_corner", 100);
     pubLaserCloudFullRes_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/velodyne_cloud_registered", 100);
     pubOdomAftMapped_ = this->create_publisher<nav_msgs::msg::Odometry>("/aft_mapped_to_init", 100);
+    pub_icp_correspondence_markers_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/debug/icp_correspondences", 10);
+    pub_selected_feature_markers_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/debug/selected_features", 10);
 
     odomAftMapped_.header.frame_id = "camera_init"; // camera_init / map
     odomAftMapped_.child_frame_id = "aft_mapped";    // aft_mapped / body
@@ -262,6 +274,8 @@ private:
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubLaserCloudSurroundCorner_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubLaserCloudFullRes_;
   rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr pubOdomAftMapped_;
+  rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pub_icp_correspondence_markers_;
+  rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pub_selected_feature_markers_;
   
   nav_msgs::msg::Odometry odomAftMapped_;
 
@@ -280,6 +294,8 @@ private:
   std::string map_file_path_;
   double filter_param_corner_;
   double filter_param_surf_;
+  bool publish_icp_correspondence_markers_;
+  bool publish_selected_feature_markers_;
 
   // Helper: Convert transform array to Eigen::Matrix4f
   Eigen::Matrix4f trans_euler_to_matrix(const std::array<float, 6>& trans) {
@@ -772,6 +788,44 @@ private:
       kdtreeCornerFromMap_->setInputCloud(laserCloudCornerFromMap_);
       kdtreeSurfFromMap_->setInputCloud(laserCloudSurfFromMap_);
 
+      visualization_msgs::msg::MarkerArray correspondence_marker_array;
+      visualization_msgs::msg::Marker corner_corr_marker;
+      visualization_msgs::msg::Marker surface_corr_marker;
+      visualization_msgs::msg::Marker selected_points_marker;
+
+      if (publish_icp_correspondence_markers_) {
+        corner_corr_marker.header.frame_id = "camera_init";
+        corner_corr_marker.ns = "corner_correspondences";
+        corner_corr_marker.id = 0;
+        corner_corr_marker.type = visualization_msgs::msg::Marker::LINE_LIST;
+        corner_corr_marker.action = visualization_msgs::msg::Marker::ADD;
+        corner_corr_marker.pose.orientation.w = 1.0;
+        corner_corr_marker.scale.x = 0.01; // Line width
+        corner_corr_marker.color.r = 1.0f; corner_corr_marker.color.g = 0.0f; corner_corr_marker.color.b = 0.0f; corner_corr_marker.color.a = 0.8f; // Red
+        corner_corr_marker.lifetime = rclcpp::Duration::from_seconds(0.2);
+
+        surface_corr_marker.header.frame_id = "camera_init";
+        surface_corr_marker.ns = "surface_correspondences";
+        surface_corr_marker.id = 1; // Different ID for surface markers
+        surface_corr_marker.type = visualization_msgs::msg::Marker::LINE_LIST;
+        surface_corr_marker.action = visualization_msgs::msg::Marker::ADD;
+        surface_corr_marker.pose.orientation.w = 1.0;
+        surface_corr_marker.scale.x = 0.01; // Line width
+        surface_corr_marker.color.r = 0.0f; surface_corr_marker.color.g = 0.0f; surface_corr_marker.color.b = 1.0f; surface_corr_marker.color.a = 0.8f; // Blue
+        surface_corr_marker.lifetime = rclcpp::Duration::from_seconds(0.2);
+      }
+      if (publish_selected_feature_markers_) {
+        selected_points_marker.header.frame_id = "camera_init";
+        selected_points_marker.ns = "selected_scan_features";
+        selected_points_marker.id = 2; // Different ID
+        selected_points_marker.type = visualization_msgs::msg::Marker::POINTS;
+        selected_points_marker.action = visualization_msgs::msg::Marker::ADD;
+        selected_points_marker.pose.orientation.w = 1.0;
+        selected_points_marker.scale.x = 0.03; selected_points_marker.scale.y = 0.03; selected_points_marker.scale.z = 0.03; // Point size
+        selected_points_marker.color.g = 1.0f; selected_points_marker.color.a = 0.9f; // Green
+        selected_points_marker.lifetime = rclcpp::Duration::from_seconds(0.2);
+      }
+
       float deltaR_final = 0.0f; // For logging after loop
       float deltaT_final = 0.0f; // For logging after loop
       int actualIterCount = 0;
@@ -780,6 +834,15 @@ private:
         actualIterCount = iterCount + 1;
         laserCloudOri_->clear();
         coeffSel_->clear();
+
+        if (publish_icp_correspondence_markers_) { // Clear points for each new iteration's correspondences
+            corner_corr_marker.points.clear();
+            surface_corr_marker.points.clear();
+        }
+        if (publish_selected_feature_markers_) {
+            selected_points_marker.points.clear();
+        }
+
         PointType pointOri, pointSel, coeff;
         std::vector<int> pointSearchInd(5); // For nearest K search
         std::vector<float> pointSearchSqDis(5);
@@ -830,6 +893,19 @@ private:
               if (s_factor > 0.1 && ld2 < 0.5) { // Check distance and weighting factor
                 laserCloudOri_->push_back(pointOri);
                 coeffSel_->push_back(coeff);
+                if (publish_icp_correspondence_markers_) {
+                  geometry_msgs::msg::Point p_scan;
+                  p_scan.x = pointSel.x; p_scan.y = pointSel.y; p_scan.z = pointSel.z;
+                  geometry_msgs::msg::Point p_map_center;
+                  p_map_center.x = cx; p_map_center.y = cy; p_map_center.z = cz;
+                  corner_corr_marker.points.push_back(p_scan);
+                  corner_corr_marker.points.push_back(p_map_center);
+                }
+                if (publish_selected_feature_markers_) {
+                  geometry_msgs::msg::Point p_sel_geom;
+                  p_sel_geom.x = pointSel.x; p_sel_geom.y = pointSel.y; p_sel_geom.z = pointSel.z;
+                  selected_points_marker.points.push_back(p_sel_geom);
+                }
               }
             }
           }
@@ -869,6 +945,21 @@ private:
               if (s_factor > 0.1 && std::abs(dist_to_plane) < 0.5) { // Check distance and weight
                 laserCloudOri_->push_back(pointOri);
                 coeffSel_->push_back(coeff);
+                if (publish_icp_correspondence_markers_) {
+                  geometry_msgs::msg::Point p_scan_surf;
+                  p_scan_surf.x = pointSel.x; p_scan_surf.y = pointSel.y; p_scan_surf.z = pointSel.z;
+                  geometry_msgs::msg::Point p_map_proj;
+                  p_map_proj.x = pointSel.x - dist_to_plane * pa; // pa, pb, pc are normalized
+                  p_map_proj.y = pointSel.y - dist_to_plane * pb;
+                  p_map_proj.z = pointSel.z - dist_to_plane * pc;
+                  surface_corr_marker.points.push_back(p_scan_surf);
+                  surface_corr_marker.points.push_back(p_map_proj);
+                }
+                if (publish_selected_feature_markers_) {
+                  geometry_msgs::msg::Point p_sel_geom;
+                  p_sel_geom.x = pointSel.x; p_sel_geom.y = pointSel.y; p_sel_geom.z = pointSel.z;
+                  selected_points_marker.points.push_back(p_sel_geom);
+                }
               }
             }
           }
@@ -951,6 +1042,26 @@ private:
         if (deltaR_final < 0.05 && deltaT_final < 0.05) break;
       }
       RCLCPP_INFO(this->get_logger(), "ICP End: Ran %d iterations. Final deltaR: %f, deltaT: %f", actualIterCount, deltaR_final, deltaT_final);
+      if (publish_icp_correspondence_markers_) {
+        rclcpp::Time currentTime_for_markers = rclcpp::Time(static_cast<uint64_t>(timeLaserCloudCornerLast_ * 1e9)); // Use input cloud time for consistency
+        if (corner_corr_marker.points.size() > 0) {
+          corner_corr_marker.header.stamp = currentTime_for_markers;
+          correspondence_marker_array.markers.push_back(corner_corr_marker);
+        }
+        if (surface_corr_marker.points.size() > 0) {
+          surface_corr_marker.header.stamp = currentTime_for_markers;
+          correspondence_marker_array.markers.push_back(surface_corr_marker);
+        }
+        if (correspondence_marker_array.markers.size() > 0) {
+          pub_icp_correspondence_markers_->publish(correspondence_marker_array);
+        }
+        if (publish_selected_feature_markers_ && selected_points_marker.points.size() > 0) {
+            selected_points_marker.header.stamp = currentTime_for_markers; // Use same consistent time
+            visualization_msgs::msg::MarkerArray selected_feature_marker_array;
+            selected_feature_marker_array.markers.push_back(selected_points_marker);
+            pub_selected_feature_markers_->publish(selected_feature_marker_array);
+        }
+      }
       RCLCPP_INFO(this->get_logger(), "ICP End: transformTobeMapped_ (before update): [%.3f, %.3f, %.3f, %.3f, %.3f, %.3f]", transformTobeMapped_[0], transformTobeMapped_[1], transformTobeMapped_[2], transformTobeMapped_[3], transformTobeMapped_[4], transformTobeMapped_[5]);
       transformUpdate(); // transformAftMapped_ = transformTobeMapped_
       RCLCPP_INFO(this->get_logger(), "ICP End: transformAftMapped_ (after update): [%.3f, %.3f, %.3f, %.3f, %.3f, %.3f]", transformAftMapped_[0], transformAftMapped_[1], transformAftMapped_[2], transformAftMapped_[3], transformAftMapped_[4], transformAftMapped_[5]);
