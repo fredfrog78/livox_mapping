@@ -301,7 +301,7 @@ private:
         for(int j = -4; j < 0; j++){
           left_list.push_back(laserCloud->points[i+j]);
         }
-        if (left_curvature < 0.001 && plane_judge(left_list, 50)) CloudFeatureFlag_[i-2] = 1; // surf point flag
+        if (left_curvature < 0.01 && plane_judge(left_list, 10)) CloudFeatureFlag_[i-2] = 1; // surf point flag
         left_surf_flag = true;
       } else {
         left_surf_flag = false;
@@ -324,7 +324,7 @@ private:
         for(int j = 1; j < 5; j++){
           right_list.push_back(laserCloud->points[i+j]);
         }
-        if (right_curvature < 0.001 && plane_judge(right_list, 50)) CloudFeatureFlag_[i+2] = 1; // surf point flag
+        if (right_curvature < 0.01 && plane_judge(right_list, 10)) CloudFeatureFlag_[i+2] = 1; // surf point flag
         count_num = 4;
         right_surf_flag = true;
       } else {
