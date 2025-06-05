@@ -28,6 +28,16 @@ def generate_launch_description():
         default_value='lidar_frame',
         description='Lidar frame ID'
     )
+    declare_publish_icp_correspondence_markers_arg = DeclareLaunchArgument(
+        'publish_icp_correspondence_markers',
+        default_value='false',
+        description='Enable/disable ICP correspondence debug markers for loam_laserMapping'
+    )
+    declare_publish_selected_feature_markers_arg = DeclareLaunchArgument(
+        'publish_selected_feature_markers',
+        default_value='false',
+        description='Enable/disable selected feature debug markers for loam_laserMapping'
+    )
 
     # Node for loam_scanRegistration
     node_scan_registration = Node(
@@ -46,7 +56,11 @@ def generate_launch_description():
         package='livox_mapping',
         executable='loam_laserMapping',
         name='loam_laserMapping',
-        output='screen'
+        output='screen',
+        parameters=[{
+            'publish_icp_correspondence_markers': LaunchConfiguration('publish_icp_correspondence_markers'),
+            'publish_selected_feature_markers': LaunchConfiguration('publish_selected_feature_markers')
+        }]
         # No direct remapping of /livox/lidar or /livox/imu here,
         # as it consumes processed topics from scanRegistration
     )
@@ -71,6 +85,8 @@ def generate_launch_description():
         declare_point_cloud_topic_arg,
         declare_imu_topic_arg,
         declare_frame_id_arg,
+        declare_publish_icp_correspondence_markers_arg,
+        declare_publish_selected_feature_markers_arg,
         node_scan_registration,
         node_laser_mapping,
         node_rviz

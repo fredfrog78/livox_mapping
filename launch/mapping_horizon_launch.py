@@ -13,6 +13,16 @@ def generate_launch_description():
         default_value='false', # Changed to false
         description='Launch RViz if true'
     )
+    declare_publish_icp_correspondence_markers_arg = DeclareLaunchArgument(
+        'publish_icp_correspondence_markers',
+        default_value='false',
+        description='Enable/disable ICP correspondence debug markers for loam_laserMapping'
+    )
+    declare_publish_selected_feature_markers_arg = DeclareLaunchArgument(
+        'publish_selected_feature_markers',
+        default_value='false',
+        description='Enable/disable selected feature debug markers for loam_laserMapping'
+    )
 
     # Set use_sim_time parameter
     set_use_sim_time = SetParameter(name='use_sim_time', value=False)
@@ -30,7 +40,11 @@ def generate_launch_description():
         package='livox_mapping',
         executable='loam_laserMapping', # Assuming executable name from CMakeLists.txt
         name='loam_laserMapping',
-        output='screen'
+        output='screen',
+        parameters=[{
+            'publish_icp_correspondence_markers': LaunchConfiguration('publish_icp_correspondence_markers'),
+            'publish_selected_feature_markers': LaunchConfiguration('publish_selected_feature_markers')
+        }]
     )
 
     # RViz node
@@ -51,6 +65,8 @@ def generate_launch_description():
 
     return LaunchDescription([
         declare_rviz_arg,
+        declare_publish_icp_correspondence_markers_arg,
+        declare_publish_selected_feature_markers_arg,
         set_use_sim_time,
         node_scan_registration_horizon,
         node_laser_mapping,
