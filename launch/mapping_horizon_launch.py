@@ -29,28 +29,99 @@ def generate_launch_description():
         description='Enable/disable console debug logging for ICP in loam_laserMapping'
     )
 
+    # Declare health monitoring launch arguments for scanRegistration_horizon
+    declare_sr_health_min_raw_points_arg = DeclareLaunchArgument(
+        'sr_health_min_raw_points', default_value='10',
+        description='Min raw points for feature extraction in scanRegistration_horizon'
+    )
+    declare_sr_health_min_sharp_features_arg = DeclareLaunchArgument(
+        'sr_health_min_sharp_features', default_value='20',
+        description='Min sharp features in scanRegistration_horizon'
+    )
+    declare_sr_health_min_flat_features_arg = DeclareLaunchArgument(
+        'sr_health_min_flat_features', default_value='50',
+        description='Min flat features in scanRegistration_horizon'
+    )
+    declare_sr_health_enable_warnings_arg = DeclareLaunchArgument(
+        'sr_health_enable_warnings', default_value='true',
+        description='Enable health warnings in scanRegistration_horizon'
+    )
+
+    # Declare health monitoring launch arguments for laserMapping
+    declare_lm_health_min_downsampled_corner_features_arg = DeclareLaunchArgument(
+        'lm_health_min_downsampled_corner_features', default_value='10',
+        description='Min downsampled corner features in laserMapping'
+    )
+    declare_lm_health_min_downsampled_surf_features_arg = DeclareLaunchArgument(
+        'lm_health_min_downsampled_surf_features', default_value='30',
+        description='Min downsampled surf features in laserMapping'
+    )
+    declare_lm_health_min_map_corner_points_for_icp_arg = DeclareLaunchArgument(
+        'lm_health_min_map_corner_points_for_icp', default_value='50',
+        description='Min map corner points for ICP in laserMapping'
+    )
+    declare_lm_health_min_map_surf_points_for_icp_arg = DeclareLaunchArgument(
+        'lm_health_min_map_surf_points_for_icp', default_value='200',
+        description='Min map surf points for ICP in laserMapping'
+    )
+    declare_lm_health_min_icp_correspondences_arg = DeclareLaunchArgument(
+        'lm_health_min_icp_correspondences', default_value='75',
+        description='Min ICP correspondences in laserMapping'
+    )
+    declare_lm_health_max_icp_delta_rotation_deg_arg = DeclareLaunchArgument(
+        'lm_health_max_icp_delta_rotation_deg', default_value='5.0',
+        description='Max ICP delta rotation (deg) in laserMapping'
+    )
+    declare_lm_health_max_icp_delta_translation_cm_arg = DeclareLaunchArgument(
+        'lm_health_max_icp_delta_translation_cm', default_value='20.0',
+        description='Max ICP delta translation (cm) in laserMapping'
+    )
+    declare_lm_health_warn_on_icp_degeneracy_arg = DeclareLaunchArgument(
+        'lm_health_warn_on_icp_degeneracy', default_value='true',
+        description='Warn on ICP degeneracy in laserMapping'
+    )
+    declare_lm_health_enable_warnings_arg = DeclareLaunchArgument(
+        'lm_health_enable_warnings', default_value='true',
+        description='Enable health warnings in laserMapping'
+    )
+
     # Set use_sim_time parameter
     set_use_sim_time = SetParameter(name='use_sim_time', value=False)
 
     # Node for loam_scanRegistration_horizon
     node_scan_registration_horizon = Node(
         package='livox_mapping',
-        executable='loam_scanRegistration_horizon', # Assuming executable name from CMakeLists.txt
+        executable='loam_scanRegistration_horizon',
         name='loam_scanRegistration_horizon',
-        output='screen'
+        output='screen',
+        parameters=[
+            {'health.min_raw_points_for_feature_extraction': LaunchConfiguration('sr_health_min_raw_points')},
+            {'health.min_sharp_features': LaunchConfiguration('sr_health_min_sharp_features')},
+            {'health.min_flat_features': LaunchConfiguration('sr_health_min_flat_features')},
+            {'health.enable_health_warnings': LaunchConfiguration('sr_health_enable_warnings')}
+        ]
     )
 
     # Node for loam_laserMapping
     node_laser_mapping = Node(
         package='livox_mapping',
-        executable='loam_laserMapping', # Assuming executable name from CMakeLists.txt
+        executable='loam_laserMapping',
         name='loam_laserMapping',
         output='screen',
-        parameters=[{
-            'markers_icp_corr': LaunchConfiguration('markers_icp_corr'),
-            'markers_sel_features': LaunchConfiguration('markers_sel_features'),
-            'enable_icp_debug_logs': LaunchConfiguration('enable_icp_debug_logs')
-        }]
+        parameters=[
+            {'markers_icp_corr': LaunchConfiguration('markers_icp_corr')},
+            {'markers_sel_features': LaunchConfiguration('markers_sel_features')},
+            {'enable_icp_debug_logs': LaunchConfiguration('enable_icp_debug_logs')},
+            {'health.min_downsampled_corner_features': LaunchConfiguration('lm_health_min_downsampled_corner_features')},
+            {'health.min_downsampled_surf_features': LaunchConfiguration('lm_health_min_downsampled_surf_features')},
+            {'health.min_map_corner_points_for_icp': LaunchConfiguration('lm_health_min_map_corner_points_for_icp')},
+            {'health.min_map_surf_points_for_icp': LaunchConfiguration('lm_health_min_map_surf_points_for_icp')},
+            {'health.min_icp_correspondences': LaunchConfiguration('lm_health_min_icp_correspondences')},
+            {'health.max_icp_delta_rotation_deg': LaunchConfiguration('lm_health_max_icp_delta_rotation_deg')},
+            {'health.max_icp_delta_translation_cm': LaunchConfiguration('lm_health_max_icp_delta_translation_cm')},
+            {'health.warn_on_icp_degeneracy': LaunchConfiguration('lm_health_warn_on_icp_degeneracy')},
+            {'health.enable_health_warnings': LaunchConfiguration('lm_health_enable_warnings')}
+        ]
     )
 
     # RViz node
@@ -74,6 +145,21 @@ def generate_launch_description():
         declare_markers_icp_corr_arg,
         declare_markers_sel_features_arg,
         declare_enable_icp_debug_logs_arg,
+        # Scan Registration Horizon health args
+        declare_sr_health_min_raw_points_arg,
+        declare_sr_health_min_sharp_features_arg,
+        declare_sr_health_min_flat_features_arg,
+        declare_sr_health_enable_warnings_arg,
+        # Laser Mapping health args
+        declare_lm_health_min_downsampled_corner_features_arg,
+        declare_lm_health_min_downsampled_surf_features_arg,
+        declare_lm_health_min_map_corner_points_for_icp_arg,
+        declare_lm_health_min_map_surf_points_for_icp_arg,
+        declare_lm_health_min_icp_correspondences_arg,
+        declare_lm_health_max_icp_delta_rotation_deg_arg,
+        declare_lm_health_max_icp_delta_translation_cm_arg,
+        declare_lm_health_warn_on_icp_degeneracy_arg,
+        declare_lm_health_enable_warnings_arg,
         set_use_sim_time,
         node_scan_registration_horizon,
         node_laser_mapping,

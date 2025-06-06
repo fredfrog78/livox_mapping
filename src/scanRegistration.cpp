@@ -87,6 +87,23 @@ public:
     matV1_ = cv::Mat(3, 3, CV_32F, cv::Scalar::all(0));
 
     CloudFeatureFlag_.resize(MAX_CLOUD_SIZE);
+
+    // Declare and get health monitoring parameters
+    this->declare_parameter<bool>("health.enable_health_warnings", true);
+    this->declare_parameter<int>("health.min_raw_points_for_feature_extraction", 10);
+    this->declare_parameter<int>("health.min_sharp_features", 20);
+    this->declare_parameter<int>("health.min_flat_features", 50);
+
+    this->get_parameter("health.enable_health_warnings", enable_health_warnings_param_);
+    this->get_parameter("health.min_raw_points_for_feature_extraction", min_raw_points_param_);
+    this->get_parameter("health.min_sharp_features", min_sharp_features_param_);
+    this->get_parameter("health.min_flat_features", min_flat_features_param_);
+
+    RCLCPP_INFO(this->get_logger(), "Health Monitoring Parameters:");
+    RCLCPP_INFO(this->get_logger(), "  enable_health_warnings: %s", enable_health_warnings_param_ ? "true" : "false");
+    RCLCPP_INFO(this->get_logger(), "  min_raw_points_for_feature_extraction: %d", min_raw_points_param_);
+    RCLCPP_INFO(this->get_logger(), "  min_sharp_features: %d", min_sharp_features_param_);
+    RCLCPP_INFO(this->get_logger(), "  min_flat_features: %d", min_flat_features_param_);
   }
 
 private:
@@ -106,6 +123,12 @@ private:
 
   std::vector<int> CloudFeatureFlag_;
   int scanID_; // Member variable if needed across methods, or local if only in callback
+
+  // Health monitoring parameters
+  bool enable_health_warnings_param_;
+  int min_raw_points_param_;
+  int min_sharp_features_param_;
+  int min_flat_features_param_;
 
 
   bool plane_judge(const std::vector<PointType>& point_list, const int plane_threshold) {
@@ -246,9 +269,19 @@ private:
     *laserCloud = Allpoints; // Use the processed points
     cloudSize = laserCloud->size(); // Update cloudSize after filtering invalid points
 
-    if (cloudSize < 10) { // Need enough points for feature extraction (e.g. 5 points on each side)
-        RCLCPP_WARN(this->get_logger(), "Not enough points (%d) for feature extraction after filtering.", cloudSize);
+    if (enable_health_warnings_param_ && cloudSize < min_raw_points_param_) {
+        RCLCPP_WARN(this->get_logger(), "Not enough raw points (%d) for feature extraction after filtering. Minimum required: %d", cloudSize, min_raw_points_param_);
         return;
+    } else if (!enable_health_warnings_param_ && cloudSize < min_raw_points_param_){
+        // If warnings are disabled but condition is met, we might still want to log at a lower level or simply return if it's critical
+        RCLCPP_DEBUG(this->get_logger(), "Not enough raw points (%d) for feature extraction after filtering (minimum required: %d), but health warnings are disabled.", cloudSize, min_raw_points_param_);
+        // A critical minimum check, ensuring feature extraction logic doesn't fail catastrophically
+        // The original code had a hardcoded check for < 10, implying 5 points on each side for some operations.
+        // Let's use a slightly more conservative absolute minimum like 5 or 6 if params are disabled.
+        if (cloudSize < 6) {
+             RCLCPP_ERROR(this->get_logger(), "Critically low number of points (%d) after filtering, even with health warnings disabled. Cannot safely proceed with feature extraction.", cloudSize);
+             return;
+        }
     }
     
     std::fill(CloudFeatureFlag_.begin(), CloudFeatureFlag_.begin() + cloudSize, 0);
@@ -523,6 +556,19 @@ private:
     RCLCPP_DEBUG(this->get_logger(), "ALL point: %d, outliers: %d", cloudSize, debugnum1);
     RCLCPP_DEBUG(this->get_logger(), "break points: %d, break feature: %d", debugnum2, debugnum3);
     RCLCPP_DEBUG(this->get_logger(), "normal points: %d, surf-surf feature: %d", debugnum4, debugnum5);
+
+    // Health checks for feature counts
+    int num_sharp_features = cornerPointsSharp.size();
+    int num_flat_features = surfPointsFlat.size();
+
+    if (enable_health_warnings_param_) {
+        if (num_sharp_features < min_sharp_features_param_) {
+            RCLCPP_WARN(this->get_logger(), "Number of sharp features (%d) is below threshold (%d).", num_sharp_features, min_sharp_features_param_);
+        }
+        if (num_flat_features < min_flat_features_param_) {
+            RCLCPP_WARN(this->get_logger(), "Number of flat features (%d) is below threshold (%d).", num_flat_features, min_flat_features_param_);
+        }
+    }
 
     sensor_msgs::msg::PointCloud2 laserCloudOutMsg;
     pcl::toROSMsg(*laserCloud, laserCloudOutMsg); // Publish the original cloud with modified intensities

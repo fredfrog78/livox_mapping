@@ -117,6 +117,38 @@ public:
     RCLCPP_INFO(this->get_logger(), "map_file_path: %s", map_file_path_.c_str());
     RCLCPP_INFO(this->get_logger(), "filter_parameter_corner: %f", filter_param_corner_);
     RCLCPP_INFO(this->get_logger(), "filter_parameter_surf: %f", filter_param_surf_);
+
+    // Declare and get health monitoring parameters
+    this->declare_parameter<bool>("health.enable_health_warnings", true);
+    this->declare_parameter<int>("health.min_downsampled_corner_features", 10);
+    this->declare_parameter<int>("health.min_downsampled_surf_features", 30);
+    this->declare_parameter<int>("health.min_map_corner_points_for_icp", 50);
+    this->declare_parameter<int>("health.min_map_surf_points_for_icp", 200);
+    this->declare_parameter<int>("health.min_icp_correspondences", 75);
+    this->declare_parameter<double>("health.max_icp_delta_rotation_deg", 5.0);
+    this->declare_parameter<double>("health.max_icp_delta_translation_cm", 20.0);
+    this->declare_parameter<bool>("health.warn_on_icp_degeneracy", true);
+
+    this->get_parameter("health.enable_health_warnings", enable_health_warnings_param_);
+    this->get_parameter("health.min_downsampled_corner_features", min_downsampled_corner_features_param_);
+    this->get_parameter("health.min_downsampled_surf_features", min_downsampled_surf_features_param_);
+    this->get_parameter("health.min_map_corner_points_for_icp", min_map_corner_points_for_icp_param_);
+    this->get_parameter("health.min_map_surf_points_for_icp", min_map_surf_points_for_icp_param_);
+    this->get_parameter("health.min_icp_correspondences", min_icp_correspondences_param_);
+    this->get_parameter("health.max_icp_delta_rotation_deg", max_icp_delta_rotation_deg_param_);
+    this->get_parameter("health.max_icp_delta_translation_cm", max_icp_delta_translation_cm_param_);
+    this->get_parameter("health.warn_on_icp_degeneracy", warn_on_icp_degeneracy_param_);
+
+    RCLCPP_INFO(this->get_logger(), "Health Monitoring Parameters (LaserMapping):");
+    RCLCPP_INFO(this->get_logger(), "  enable_health_warnings: %s", enable_health_warnings_param_ ? "true" : "false");
+    RCLCPP_INFO(this->get_logger(), "  min_downsampled_corner_features: %d", min_downsampled_corner_features_param_);
+    RCLCPP_INFO(this->get_logger(), "  min_downsampled_surf_features: %d", min_downsampled_surf_features_param_);
+    RCLCPP_INFO(this->get_logger(), "  min_map_corner_points_for_icp: %d", min_map_corner_points_for_icp_param_);
+    RCLCPP_INFO(this->get_logger(), "  min_map_surf_points_for_icp: %d", min_map_surf_points_for_icp_param_);
+    RCLCPP_INFO(this->get_logger(), "  min_icp_correspondences: %d", min_icp_correspondences_param_);
+    RCLCPP_INFO(this->get_logger(), "  max_icp_delta_rotation_deg: %.2f", max_icp_delta_rotation_deg_param_);
+    RCLCPP_INFO(this->get_logger(), "  max_icp_delta_translation_cm: %.2f", max_icp_delta_translation_cm_param_);
+    RCLCPP_INFO(this->get_logger(), "  warn_on_icp_degeneracy: %s", warn_on_icp_degeneracy_param_ ? "true" : "false");
     RCLCPP_INFO(this->get_logger(), "------------------------------------");
 
     // Initialize PCL shared pointers
@@ -303,6 +335,17 @@ private:
   bool markers_icp_corr_;
   bool markers_sel_features_;
   bool enable_icp_debug_logs_;
+
+  // Health monitoring parameters
+  bool enable_health_warnings_param_;
+  int min_downsampled_corner_features_param_;
+  int min_downsampled_surf_features_param_;
+  int min_map_corner_points_for_icp_param_;
+  int min_map_surf_points_for_icp_param_;
+  int min_icp_correspondences_param_;
+  double max_icp_delta_rotation_deg_param_;
+  double max_icp_delta_translation_cm_param_;
+  bool warn_on_icp_degeneracy_param_;
 
   // Helper: Convert transform array to Eigen::Matrix4f
   Eigen::Matrix4f trans_euler_to_matrix(const std::array<float, 6>& trans) {
@@ -786,13 +829,32 @@ private:
     downSizeFilterSurf_.filter(*laserCloudSurfLast_down_);
     // int laserCloudSurfLast_downNum = laserCloudSurfLast_down_->points.size();
 
+    if (enable_health_warnings_param_) {
+        if (static_cast<int>(laserCloudCornerLast_down_->size()) < min_downsampled_corner_features_param_) {
+            RCLCPP_WARN(this->get_logger(), "LaserMapping: Number of downsampled corner features (%ld) is below threshold (%d).", laserCloudCornerLast_down_->size(), min_downsampled_corner_features_param_);
+        }
+        if (static_cast<int>(laserCloudSurfLast_down_->size()) < min_downsampled_surf_features_param_) {
+            RCLCPP_WARN(this->get_logger(), "LaserMapping: Number of downsampled surf features (%ld) is below threshold (%d).", laserCloudSurfLast_down_->size(), min_downsampled_surf_features_param_);
+        }
+    }
+
     // t2 = clock();
 
     // Main ICP optimization loop
     if (enable_icp_debug_logs_) {
       RCLCPP_INFO(this->get_logger(), "Pre-ICP: laserCloudCornerLast_down size: %ld, laserCloudSurfLast_down size: %ld", laserCloudCornerLast_down_->size(), laserCloudSurfLast_down_->size());
     }
-    if (laserCloudCornerFromMap_->points.size() > 10 && laserCloudSurfFromMap_->points.size() > 100) {
+
+    if (enable_health_warnings_param_) {
+        if (static_cast<int>(laserCloudCornerFromMap_->points.size()) < min_map_corner_points_for_icp_param_) {
+            RCLCPP_WARN(this->get_logger(), "LaserMapping: Number of map corner points for ICP (%ld) is below threshold (%d).", laserCloudCornerFromMap_->points.size(), min_map_corner_points_for_icp_param_);
+        }
+        if (static_cast<int>(laserCloudSurfFromMap_->points.size()) < min_map_surf_points_for_icp_param_) {
+            RCLCPP_WARN(this->get_logger(), "LaserMapping: Number of map surf points for ICP (%ld) is below threshold (%d).", laserCloudSurfFromMap_->points.size(), min_map_surf_points_for_icp_param_);
+        }
+    }
+
+    if (laserCloudCornerFromMap_->points.size() > 10 && laserCloudSurfFromMap_->points.size() > 100) { // Existing critical check to skip ICP
       if (enable_icp_debug_logs_) {
         RCLCPP_INFO(this->get_logger(), "ICP Start: laserCloudCornerFromMap size: %ld, laserCloudSurfFromMap size: %ld", laserCloudCornerFromMap_->size(), laserCloudSurfFromMap_->size());
       }
@@ -1056,7 +1118,14 @@ private:
         if (enable_icp_debug_logs_) {
           RCLCPP_INFO(this->get_logger(), "ICP Iter %d: laserCloudSelNum: %d", iterCount, laserCloudSelNum);
         }
-        if (laserCloudSelNum < 50) continue; // Need enough constraints
+
+        if (enable_health_warnings_param_) {
+            if (laserCloudSelNum < min_icp_correspondences_param_) {
+                RCLCPP_WARN(this->get_logger(), "LaserMapping: Number of ICP correspondences (%d) in iteration %d is below threshold (%d).", laserCloudSelNum, actualIterCount, min_icp_correspondences_param_);
+            }
+        }
+
+        if (laserCloudSelNum < 50) continue; // Need enough constraints (original critical check)
 
         cv::Mat matA(laserCloudSelNum, 6, CV_32F, cv::Scalar::all(0));
         cv::Mat matAt(6, laserCloudSelNum, CV_32F, cv::Scalar::all(0));
@@ -1130,8 +1199,21 @@ private:
         if (deltaR_final < 0.05 && deltaT_final < 0.05) break;
       }
       if (enable_icp_debug_logs_) {
-        RCLCPP_INFO(this->get_logger(), "ICP End: Ran %d iterations. Final deltaR: %f, deltaT: %f", actualIterCount, deltaR_final, deltaT_final);
+        RCLCPP_INFO(this->get_logger(), "ICP End: Ran %d iterations. Final deltaR: %f deg, deltaT: %f cm", actualIterCount, deltaR_final, deltaT_final);
       }
+
+      if (enable_health_warnings_param_) {
+          if (deltaR_final > max_icp_delta_rotation_deg_param_) {
+              RCLCPP_WARN(this->get_logger(), "LaserMapping: ICP delta rotation (%.2f deg) exceeds threshold (%.2f deg).", deltaR_final, max_icp_delta_rotation_deg_param_);
+          }
+          if (deltaT_final > max_icp_delta_translation_cm_param_) {
+              RCLCPP_WARN(this->get_logger(), "LaserMapping: ICP delta translation (%.2f cm) exceeds threshold (%.2f cm).", deltaT_final, max_icp_delta_translation_cm_param_);
+          }
+          if (warn_on_icp_degeneracy_param_ && isDegenerate_) {
+              RCLCPP_WARN(this->get_logger(), "LaserMapping: ICP optimization was degenerate.");
+          }
+      }
+
       if (markers_icp_corr_) {
         rclcpp::Time currentTime_for_markers = rclcpp::Time(static_cast<uint64_t>(timeLaserCloudCornerLast_ * 1e9)); // Use input cloud time for consistency
 
