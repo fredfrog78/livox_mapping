@@ -49,7 +49,7 @@
 #include <cmath>
 #include <algorithm> // For std::fill, std::floor
 
-typedef pcl::PointXYZINormal PointType;
+typedef pcl::PointXYZI PointType;
 const int MAX_CLOUD_SIZE = 32000; // Maximum cloud size to process
 
 class ScanRegistration : public rclcpp::Node {
@@ -225,11 +225,11 @@ private:
       point.y = laserCloudIn.points[i].y;
       point.z = laserCloudIn.points[i].z;
       
-      // Directly use intensity and curvature from input (from livox_repub)
+      // Directly use intensity from input (from livox_repub)
+      // Curvature is no longer used as timestamp; timestamp is part of PointCloud2 header
       point.intensity = laserCloudIn.points[i].intensity; 
-      point.curvature = laserCloudIn.points[i].curvature; // This ensures timestamp is preserved
 
-      // scanID_ calculation removed, as line info is now in intensity and timestamp in curvature
+      // scanID_ calculation removed, as line info is now in intensity
       // double theta = std::atan2(laserCloudIn.points[i].y, laserCloudIn.points[i].z) / M_PI * 180 + 180;
       // scanID_ = std::floor(theta / 9); 
 

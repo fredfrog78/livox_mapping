@@ -6,7 +6,7 @@
 #include <pcl/point_types.h>
 #include <vector>
 
-typedef pcl::PointXYZINormal PointType;
+typedef pcl::PointXYZI PointType;
 typedef pcl::PointCloud<PointType> PointCloudXYZI;
 
 class LivoxRepub : public rclcpp::Node {
@@ -63,7 +63,6 @@ private:
         // This encoding might need re-evaluation for clarity or standard PCL fields.
         pt.intensity = static_cast<float>(livox_msg->points[i].line) + 
                        static_cast<float>(livox_msg->points[i].reflectivity) / 10000.0f; 
-        pt.curvature = s * 0.1f; // Timestamp encoded in curvature
         pcl_in.push_back(pt);
       }
     }

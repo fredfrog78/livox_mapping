@@ -88,22 +88,22 @@ The `livox_mapping` package consists of several key nodes that work together in 
 
 *   **`livox_repub` (Executable: `livox_repub`)**
     *   **Purpose:** Subscribes to raw Livox custom messages (`livox_ros_driver2::msg::CustomMsg`), aggregates them, and republishes as a standard ROS 2 point cloud (`sensor_msgs::msg::PointCloud2`).
-    *   **Point Type:** Converts Livox points to `pcl::PointXYZINormal`. Critically, it populates:
+    *   **Point Type:** Converts Livox points to `pcl::PointXYZI`. It populates:
         *   `intensity`: Encodes Livox line number (integer part) and reflectivity (decimal part).
-        *   `curvature`: Encodes a normalized timestamp for points within the aggregated scan (scaled by 0.1). This is vital for motion distortion compensation.
+        *   The `curvature` field is no longer populated with a timestamp. Timestamps are primarily handled by the message header.
 *   **`scanRegistration` (Executable: `loam_scanRegistration`)**
     *   **Purpose:** Processes point clouds from `livox_repub` (or directly from a driver if configured) to extract geometric features: sharp edges (corners) and planar surfaces. This version is generally applicable to various Livox scan patterns.
     *   **Output:** Publishes feature clouds (`/laser_cloud_sharp`, `/laser_cloud_flat`).
-    *   **Point Type:** Uses `pcl::PointXYZINormal`. It preserves `intensity` (line number + reflectivity) and `curvature` (normalized timestamp) data from the input cloud (e.g., from `livox_repub`), making it suitable for use in a pipeline with `laserMapping` for accurate motion compensation.
+    *   **Point Type:** Uses `pcl::PointXYZI`. It preserves `intensity` (line number + reflectivity) from the input cloud.
 *   **`scanRegistration_horizon` (Executable: `loam_scanRegistration_horizon`)**
     *   **Purpose:** An alternative feature extraction node, potentially optimized for Livox Horizon or other multi-line Lidars where `N_SCANS` is a meaningful parameter.
-    *   **Point Type:** Correctly uses `pcl::PointXYZINormal` and preserves `intensity` and `curvature` from the input cloud (e.g., from `livox_repub`).
+    *   **Point Type:** Uses `pcl::PointXYZI` and preserves `intensity` from the input cloud.
 *   **`laserMapping` (Executable: `loam_laserMapping`)**
-    *   **Purpose:** Performs scan-to-map matching using the extracted features. It estimates the LiDAR's pose, corrects for motion distortion, and builds/updates a 3D map.
-    *   **Point Type:** Expects input feature clouds with `pcl::PointXYZINormal` points, specifically utilizing the `curvature` field for motion distortion compensation (assuming it's `normalized_scan_time * 0.1` from upstream nodes).
+    *   **Purpose:** Performs scan-to-map matching using the extracted features. It estimates the LiDAR's pose, and builds/updates a 3D map.
+    *   **Point Type:** Expects input feature clouds with `pcl::PointXYZI` points. Motion distortion compensation that previously relied on a `curvature` field in `pointAssociateToMap_all` is currently not active (timestamps are per-message).
 
 **Recommended Data Flow for Accurate Mapping:**
-`livox_ros_driver2` -> `livox_repub` (outputs `/livox_pcl0` with `PointXYZINormal`) -> `loam_scanRegistration` OR `loam_scanRegistration_horizon` (consumes `/livox_pcl0`, outputs feature clouds with `PointXYZINormal`) -> `loam_laserMapping`.
+`livox_ros_driver2` -> `livox_repub` (outputs `/livox_pcl0` with `pcl::PointXYZI`) -> `loam_scanRegistration` OR `loam_scanRegistration_horizon` (consumes `/livox_pcl0`, outputs feature clouds with `pcl::PointXYZI`) -> `loam_laserMapping`.
 The choice between `loam_scanRegistration` and `loam_scanRegistration_horizon` depends on the LiDAR model and scan pattern. `loam_scanRegistration` is more generic.
 
 ## 4. Parameters
@@ -200,7 +200,7 @@ ros2 launch livox_mapping mapping_mid360.launch.py rviz:=true
 The original `mapping_horizon.launch` was XML. A `mapping_horizon.launch.py` would need to be created, likely launching `livox_repub`, `loam_scanRegistration_horizon` (setting the `n_scans` parameter appropriately for Horizon), and `loam_laserMapping`.
 
 **Important Notes on Launching (General):**
-*   Ensure the feature extraction pipeline consistently uses `pcl::PointXYZINormal` (this is now true for `livox_repub` -> `loam_scanRegistration` and `livox_repub` -> `loam_scanRegistration_horizon`).
+*   Ensure the feature extraction pipeline consistently uses `pcl::PointXYZI`.
 *   The `*_launch.py` files provided are examples. You may need to adapt them (e.g., to use `loam_scanRegistration_horizon` instead of `loam_scanRegistration` in `mapping_mid.launch.py` if preferred) or create new ones for different LiDARs or configurations.
 
 ### 7.2. RViz Visualization
@@ -241,8 +241,8 @@ The original README provided links to ROS 1 bag files. These can be converted to
 
 
 ## 9. Important Notes & Known Issues
-*   **PointType Consistency:** All nodes in the processing pipeline (`livox_repub`, `scanRegistration` or `scanRegistration_horizon`, `laserMapping`) must consistently use a PCL `PointType` that includes a `curvature` field (like `pcl::PointXYZINormal`) and correctly propagate the normalized timestamp information in this field. This has been addressed for `scanRegistration.cpp` and is correctly handled by `scanRegistration_horizon.cpp`.
-*   **Curvature/Timestamp Normalization:** The `laserMapping` node assumes the `curvature` field it receives is `normalized_scan_time * 0.1`. The `livox_repub` node produces this format. If your data pipeline differs you must adjust the scaling factor in `laserMapping.cpp` (function `pointAssociateToMap_all`).
+*   **PointType Consistency:** All nodes in the processing pipeline (`livox_repub`, `scanRegistration` or `scanRegistration_horizon`, `laserMapping`) now consistently use `pcl::PointXYZI`. The `curvature` field is no longer used for propagating normalized timestamp information. Timestamps are handled at the message level.
+*   **Motion Distortion Compensation in `laserMapping`:** The `laserMapping` node's `pointAssociateToMap_all` function previously used the `curvature` field for motion deskewing within a scan. As this field is no longer available for that purpose, this specific per-point motion compensation is not currently active. Overall mapping relies on per-message timestamps.
 *   **TF Frames:** The transform `camera_init` -> `aft_mapped` published by `laserMapping` may need adjustments in its RPY mapping depending on your specific robot configuration and desired ROS coordinate frame conventions (e.g., REP-103/REP-105). Visual verification in RViz is crucial.
 *   **Livox Mid360:** The provided `mapping_mid360.launch.py` uses the generic `loam_scanRegistration` node. The performance and feature extraction quality with Mid360's unique scan pattern should be carefully evaluated. Parameters within `laserMapping` (e.g., filter sizes) or the choice of feature extractor might require tuning for optimal results with Mid360.
 
