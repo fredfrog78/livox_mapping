@@ -38,6 +38,7 @@
 #include "pcl_conversions/pcl_conversions.h"
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
+#include <pcl/common/common.h>
 // #include <pcl/filters/voxel_grid.h> // Not used in the provided snippet
 // #include <pcl/kdtree/kdtree_flann.h> // Not used in the provided snippet
 
@@ -69,6 +70,12 @@ public:
     subLaserCloud_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
         "/livox_pcl0", rclcpp::QoS(100), // Original queue size was 100
         std::bind(&ScanRegistration::laserCloudHandler, this, std::placeholders::_1));
+
+    RCLCPP_INFO(this->get_logger(), "--- ScanRegistration Node ---");
+    if (subLaserCloud_) {
+        RCLCPP_INFO(this->get_logger(), "Subscribed to PointCloud2 on topic: %s", subLaserCloud_->get_topic_name());
+    }
+    RCLCPP_INFO(this->get_logger(), "-----------------------------");
 
     // subLaserCloud_for_hk_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
     //     "/livox/lidar", 2, std::bind(&ScanRegistration::laserCloudHandler_temp, this, std::placeholders::_1)); // For hkmars_data (commented out)
@@ -285,7 +292,7 @@ private:
         for(int j = -4; j < 0; j++){
           left_list.push_back(laserCloud->points[i+j]);
         }
-        if (left_curvature < 0.001 && plane_judge(left_list, 1000)) CloudFeatureFlag_[i-2] = 1; // surf point flag
+        if (left_curvature < 0.01) CloudFeatureFlag_[i-2] = 1; // surf point flag
         left_surf_flag = true;
       } else {
         left_surf_flag = false;
@@ -308,7 +315,7 @@ private:
         for(int j = 1; j < 5; j++){
           right_list.push_back(laserCloud->points[i+j]);
         }
-        if (right_curvature < 0.001 && plane_judge(right_list, 1000)) CloudFeatureFlag_[i+2] = 1; // surf point flag
+        if (right_curvature < 0.01) CloudFeatureFlag_[i+2] = 1; // surf point flag
         count_num = 4;
         right_surf_flag = true;
       } else {
@@ -496,21 +503,21 @@ private:
     }
 
     for (int i = 0; i < cloudSize; i++) {
-      // The intensity encoding was done earlier based on scanID and raw intensity.
-      // The original code had a line here:
-      // laserCloud->points[i].intensity = double(CloudFeatureFlag_[i]) / 10000;
-      // This would overwrite the scanID/timestamp info. It seems this was for debugging.
-      // If this intensity is crucial for later nodes, it needs careful consideration.
-      // For now, I am keeping the intensity as set in the first loop (scanID + fractional part).
-
-      if (CloudFeatureFlag_[i] == 1) { // surf point
-        surfPointsFlat.push_back(laserCloud->points[i]);
+      // Points with CloudFeatureFlag_[i] == 250 (outliers) are ignored.
+      if (CloudFeatureFlag_[i] == 250) {
         continue;
       }
-      if (CloudFeatureFlag_[i] == 100 || CloudFeatureFlag_[i] == 150) { // break point or surf-surf corner
+
+      if (CloudFeatureFlag_[i] == 100 || CloudFeatureFlag_[i] == 150) {
+        // break point or surf-surf corner
         cornerPointsSharp.push_back(laserCloud->points[i]);
-      } 
-      // Points with CloudFeatureFlag_[i] == 0 (regular points) or 250 (outliers) are not added to feature clouds.
+      } else if (CloudFeatureFlag_[i] == 1 || CloudFeatureFlag_[i] == 0) {
+        // Original surf points (flag 1) AND 'regular' points (flag 0)
+        surfPointsFlat.push_back(laserCloud->points[i]);
+      }
+      // Note: This structure ensures that if a point somehow ended up with a flag like 100
+      // AND would also qualify for flag 0 (which shouldn't happen with current logic upstream),
+      // it's treated as a corner. Outliers are explicitly skipped first.
     }
 
     RCLCPP_DEBUG(this->get_logger(), "ALL point: %d, outliers: %d", cloudSize, debugnum1);

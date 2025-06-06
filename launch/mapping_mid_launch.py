@@ -10,8 +10,23 @@ def generate_launch_description():
     # Declare launch arguments
     declare_rviz_arg = DeclareLaunchArgument(
         'rviz',
-        default_value='true',
+        default_value='false', # Changed to false
         description='Launch RViz if true'
+    )
+    declare_markers_icp_corr_arg = DeclareLaunchArgument(
+        'markers_icp_corr',
+        default_value='false',
+        description='Enable/disable ICP correspondence debug markers (markers_icp_corr) for loam_laserMapping'
+    )
+    declare_markers_sel_features_arg = DeclareLaunchArgument(
+        'markers_sel_features',
+        default_value='false',
+        description='Enable/disable selected feature debug markers (markers_sel_features) for loam_laserMapping'
+    )
+    declare_enable_icp_debug_logs_arg = DeclareLaunchArgument(
+        'enable_icp_debug_logs',
+        default_value='false',
+        description='Enable/disable console debug logging for ICP in loam_laserMapping'
     )
 
     # Set use_sim_time parameter
@@ -30,7 +45,12 @@ def generate_launch_description():
         package='livox_mapping',
         executable='loam_laserMapping', 
         name='loam_laserMapping',
-        output='screen'
+        output='screen',
+        parameters=[{
+            'markers_icp_corr': LaunchConfiguration('markers_icp_corr'),
+            'markers_sel_features': LaunchConfiguration('markers_sel_features'),
+            'enable_icp_debug_logs': LaunchConfiguration('enable_icp_debug_logs')
+        }]
     )
 
     # RViz node
@@ -51,6 +71,9 @@ def generate_launch_description():
 
     return LaunchDescription([
         declare_rviz_arg,
+        declare_markers_icp_corr_arg,
+        declare_markers_sel_features_arg,
+        declare_enable_icp_debug_logs_arg,
         set_use_sim_time,
         node_scan_registration,
         node_laser_mapping,

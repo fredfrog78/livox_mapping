@@ -1,6 +1,6 @@
 import os
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, SetParameter
+from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
@@ -12,6 +12,21 @@ def generate_launch_description():
         'rviz',
         default_value='false', # Changed to false
         description='Launch RViz if true'
+    )
+    declare_point_cloud_topic_arg = DeclareLaunchArgument(
+        'point_cloud_topic',
+        default_value='/livox/lidar',
+        description='Point cloud topic name'
+    )
+    declare_imu_topic_arg = DeclareLaunchArgument(
+        'imu_topic',
+        default_value='/livox/imu',
+        description='IMU topic name'
+    )
+    declare_frame_id_arg = DeclareLaunchArgument(
+        'frame_id',
+        default_value='lidar_frame',
+        description='Lidar frame ID'
     )
     declare_markers_icp_corr_arg = DeclareLaunchArgument(
         'markers_icp_corr',
@@ -29,29 +44,22 @@ def generate_launch_description():
         description='Enable/disable console debug logging for ICP in loam_laserMapping'
     )
 
-    # Set use_sim_time parameter
-    set_use_sim_time = SetParameter(name='use_sim_time', value=False)
-
-    # Node for livox_repub
-    node_livox_repub = Node(
-        package='livox_mapping',
-        executable='livox_repub', # Executable name for livox_repub
-        name='livox_repub',
-        output='screen'
-    )
-
     # Node for loam_scanRegistration
     node_scan_registration = Node(
         package='livox_mapping',
-        executable='loam_scanRegistration', # Executable name for mid-range LiDAR
+        executable='loam_scanRegistration',
         name='loam_scanRegistration',
-        output='screen'
+        output='screen',
+        remappings=[
+            ('/livox_pcl0', LaunchConfiguration('point_cloud_topic')), # Changed '/livox/lidar' to '/livox_pcl0'
+            ('/livox/imu', LaunchConfiguration('imu_topic'))
+        ]
     )
 
     # Node for loam_laserMapping
     node_laser_mapping = Node(
         package='livox_mapping',
-        executable='loam_laserMapping', 
+        executable='loam_laserMapping',
         name='loam_laserMapping',
         output='screen',
         parameters=[{
@@ -59,6 +67,8 @@ def generate_launch_description():
             'markers_sel_features': LaunchConfiguration('markers_sel_features'),
             'enable_icp_debug_logs': LaunchConfiguration('enable_icp_debug_logs')
         }]
+        # No direct remapping of /livox/lidar or /livox/imu here,
+        # as it consumes processed topics from scanRegistration
     )
 
     # RViz node
@@ -73,17 +83,17 @@ def generate_launch_description():
         name='rviz2',
         arguments=['-d', rviz_config_file],
         output='screen',
-        # prefix=['nice'],
         condition=IfCondition(LaunchConfiguration('rviz'))
     )
 
     return LaunchDescription([
         declare_rviz_arg,
+        declare_point_cloud_topic_arg,
+        declare_imu_topic_arg,
+        declare_frame_id_arg,
         declare_markers_icp_corr_arg,
         declare_markers_sel_features_arg,
         declare_enable_icp_debug_logs_arg,
-        set_use_sim_time,
-        node_livox_repub,
         node_scan_registration,
         node_laser_mapping,
         node_rviz
