@@ -1017,12 +1017,12 @@ private:
               if (s_factor > 0.1 && std::abs(dist_to_plane) < 0.5) { // Check distance and weight
                 laserCloudOri_->push_back(pointOri);
                 coeffSel_->push_back(coeff);
-                if (publish_icp_correspondence_markers_) {
+                if (pub_icp_correspondence_markers_) {
                   geometry_msgs::msg::Point p_scan_surf;
                   p_scan_surf.x = pointSel.x; p_scan_surf.y = pointSel.y; p_scan_surf.z = pointSel.z;
                   geometry_msgs::msg::Point p_map_proj;
                   p_map_proj.x = pointSel.x - dist_to_plane * pa; // pa, pb, pc are normalized
-                  geometry_msgs::msg::Point p_scan_surf;
+                  // geometry_msgs::msg::Point p_scan_surf; // Removed redeclaration
                   p_scan_surf.x = pointSel.x; p_scan_surf.y = pointSel.y; p_scan_surf.z = pointSel.z;
                   scan_surface_pts_marker.points.push_back(p_scan_surf);
 
@@ -1034,7 +1034,7 @@ private:
                     map_surface_pts_marker.points.push_back(map_pt);
                   }
 
-                  geometry_msgs::msg::Point p_map_proj;
+                  // geometry_msgs::msg::Point p_map_proj; // Removed redeclaration
                   p_map_proj.x = pointSel.x - dist_to_plane * pa;
                   p_map_proj.y = pointSel.y - dist_to_plane * pb;
                   p_map_proj.z = pointSel.z - dist_to_plane * pc;
