@@ -62,7 +62,7 @@
 #include <fstream> // For std::ofstream
 #include <array>   // For std::array
 
-typedef pcl::PointXYZINormal PointType;
+typedef pcl::PointXYZI PointType;
 
 // Utility functions (can be static members or in a utility namespace)
 static double rad2deg(double radians) {
