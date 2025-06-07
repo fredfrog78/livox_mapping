@@ -49,6 +49,9 @@
 #include <cmath>
 #include <algorithm> // For std::fill, std::floor
 
+#include "adaptive_parameter_manager_types.h" // For health status enums
+#include "std_msgs/msg/int32.hpp" // To publish enum as integer
+
 typedef pcl::PointXYZI PointType;
 const int MAX_CLOUD_SIZE = 32000; // Maximum cloud size to process
 
@@ -61,6 +64,7 @@ public:
     pubLaserCloud_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/livox_cloud", 20);
     pubCornerPointsSharp_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/laser_cloud_sharp", 20);
     pubSurfPointsFlat_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/laser_cloud_flat", 20);
+    pub_health_status_ = this->create_publisher<std_msgs::msg::Int32>("/scan_registration/health_status", 10);
     
     // pubLaserCloud_temp_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/livox/lidar_temp", 2); // For hkmars_data (commented out)
 
@@ -110,6 +114,7 @@ private:
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubLaserCloud_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubCornerPointsSharp_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubSurfPointsFlat_;
+  rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr pub_health_status_;
   // rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubLaserCloud_temp_; // For hkmars_data
 
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr subLaserCloud_;
@@ -269,17 +274,29 @@ private:
     *laserCloud = Allpoints; // Use the processed points
     cloudSize = laserCloud->size(); // Update cloudSize after filtering invalid points
 
+    // This is the cloudSize after NaN filtering. This is the best place to check min_raw_points_param_
+    // for the purpose of the ScanRegistrationHealth::LOW_RAW_POINTS state.
+    bool raw_points_low_for_health_status = (cloudSize < min_raw_points_param_);
+
+
     if (enable_health_warnings_param_ && cloudSize < min_raw_points_param_) {
         RCLCPP_WARN(this->get_logger(), "Not enough raw points (%d) for feature extraction after filtering. Minimum required: %d", cloudSize, min_raw_points_param_);
+        // If too few points even for health check, publish bad health and return.
+        if (pub_health_status_) {
+            std_msgs::msg::Int32 health_msg;
+            health_msg.data = static_cast<int>(loam_adaptive_parameter_manager::ScanRegistrationHealth::LOW_RAW_POINTS);
+            pub_health_status_->publish(health_msg);
+        }
         return;
     } else if (!enable_health_warnings_param_ && cloudSize < min_raw_points_param_){
-        // If warnings are disabled but condition is met, we might still want to log at a lower level or simply return if it's critical
         RCLCPP_DEBUG(this->get_logger(), "Not enough raw points (%d) for feature extraction after filtering (minimum required: %d), but health warnings are disabled.", cloudSize, min_raw_points_param_);
-        // A critical minimum check, ensuring feature extraction logic doesn't fail catastrophically
-        // The original code had a hardcoded check for < 10, implying 5 points on each side for some operations.
-        // Let's use a slightly more conservative absolute minimum like 5 or 6 if params are disabled.
-        if (cloudSize < 6) {
-             RCLCPP_ERROR(this->get_logger(), "Critically low number of points (%d) after filtering, even with health warnings disabled. Cannot safely proceed with feature extraction.", cloudSize);
+        if (cloudSize < 6) { // Absolute minimum to proceed
+             RCLCPP_ERROR(this->get_logger(), "Critically low number of points (%d) after filtering, even with health warnings disabled. Cannot safely proceed.", cloudSize);
+             if (pub_health_status_) {
+                 std_msgs::msg::Int32 health_msg;
+                 health_msg.data = static_cast<int>(loam_adaptive_parameter_manager::ScanRegistrationHealth::LOW_RAW_POINTS);
+                 pub_health_status_->publish(health_msg);
+             }
              return;
         }
     }
@@ -298,16 +315,8 @@ private:
     int count_num = 1;
     bool left_surf_flag = false;
     bool right_surf_flag = false;
-    // Eigen::Vector3d surf_vector_current(0,0,0); // Not used
-    // Eigen::Vector3d surf_vector_last(0,0,0); // Not used
-    // int last_surf_position = 0; // Not used
-    // double depth_threshold = 0.1; // Not used by this name, logic embedded
 
     for (int i = 5; i < cloudSize - 5; i += count_num ) {
-      // float depth = sqrt(laserCloud->points[i].x * laserCloud->points[i].x +
-      //                  laserCloud->points[i].y * laserCloud->points[i].y +
-      //                  laserCloud->points[i].z * laserCloud->points[i].z);
-
       float ldiffX = laserCloud->points[i - 4].x + laserCloud->points[i - 3].x
                    - 4 * laserCloud->points[i - 2].x
                    + laserCloud->points[i - 1].x + laserCloud->points[i].x;
@@ -364,21 +373,21 @@ private:
             Eigen::Vector3d tmp(laserCloud->points[i-k].x-laserCloud->points[i].x,
                                laserCloud->points[i-k].y-laserCloud->points[i].y,
                                laserCloud->points[i-k].z-laserCloud->points[i].z);
-            tmp.normalize(); // Handle potential zero norm if points are identical
+            tmp.normalize();
             norm_left += (k/10.0)* tmp;
         }
         for(int k = 1;k<5;k++){
             Eigen::Vector3d tmp(laserCloud->points[i+k].x-laserCloud->points[i].x,
                                laserCloud->points[i+k].y-laserCloud->points[i].y,
                                laserCloud->points[i+k].z-laserCloud->points[i].z);
-            tmp.normalize(); // Handle potential zero norm
+            tmp.normalize();
             norm_right += (k/10.0)* tmp;
         }
 
         double norm_left_mag = norm_left.norm();
         double norm_right_mag = norm_right.norm();
         double cc = 0.0;
-        if (norm_left_mag > 1e-6 && norm_right_mag > 1e-6) { // Avoid division by zero
+        if (norm_left_mag > 1e-6 && norm_right_mag > 1e-6) {
              cc = std::abs(norm_left.dot(norm_right) / (norm_left_mag * norm_right_mag));
         }
 
@@ -416,13 +425,6 @@ private:
         float diffZ2 = laserCloud->points[i - count].z - laserCloud->points[i].z;
         diff_left[count - 1] = sqrt(diffX2 * diffX2 + diffY2 * diffY2 + diffZ2 * diffZ2);
       }
-
-      // float depth_right = sqrt(laserCloud->points[i + 1].x * laserCloud->points[i + 1].x +
-      //                  laserCloud->points[i + 1].y * laserCloud->points[i + 1].y +
-      //                  laserCloud->points[i + 1].z * laserCloud->points[i + 1].z);
-      // float depth_left = sqrt(laserCloud->points[i - 1].x * laserCloud->points[i - 1].x +
-      //                 laserCloud->points[i - 1].y * laserCloud->points[i - 1].y +
-      //                 laserCloud->points[i - 1].z * laserCloud->points[i - 1].z);
       
       float depth_right = Eigen::Vector3f(laserCloud->points[i+1].x, laserCloud->points[i+1].y, laserCloud->points[i+1].z).norm();
       float depth_left  = Eigen::Vector3f(laserCloud->points[i-1].x, laserCloud->points[i-1].y, laserCloud->points[i-1].z).norm();
@@ -444,7 +446,7 @@ private:
                                        laserCloud->points[i].z);
           double left_surf_dis = surf_vector.norm();
           double cc = 0.0;
-          if (left_surf_dis > 1e-6 && lidar_vector.norm() > 1e-6) { // Avoid division by zero
+          if (left_surf_dis > 1e-6 && lidar_vector.norm() > 1e-6) {
             cc = std::abs(surf_vector.dot(lidar_vector) / (left_surf_dis * lidar_vector.norm()));
           }
           
@@ -452,7 +454,7 @@ private:
           double min_dis = 10000, max_dis = 0;
           for(int j = 0; j < 4; j++){
             left_list.push_back(laserCloud->points[i-j]);
-            if (j == 3) break; // Avoid access laserCloud->points[i-j-1] out of bound for j=3
+            if (j == 3) break;
             Eigen::Vector3d temp_vector(laserCloud->points[i-j].x-laserCloud->points[i-j-1].x,
                                         laserCloud->points[i-j].y-laserCloud->points[i-j-1].y,
                                         laserCloud->points[i-j].z-laserCloud->points[i-j-1].z);
@@ -464,7 +466,7 @@ private:
 
           if (left_is_plane && (max_dis < 2*min_dis) && left_surf_dis < 0.05 * depth  && cc < 0.8){
             if (depth_right > depth_left) CloudFeatureFlag_[i] = 100;
-            else if (depth_right == 0) CloudFeatureFlag_[i] = 100; // Original logic, check if really intended
+            else if (depth_right == 0) CloudFeatureFlag_[i] = 100;
           }
         } else {
           Eigen::Vector3d surf_vector(laserCloud->points[i+4].x-laserCloud->points[i].x,
@@ -482,8 +484,8 @@ private:
           std::vector<PointType> right_list; right_list.reserve(4);
           double min_dis = 10000, max_dis = 0;
           for(int j = 0; j < 4; j++){
-            right_list.push_back(laserCloud->points[i+j]); // Original was i-j, seems like a bug, should be i+j
-            if (j == 3) break; // Avoid access laserCloud->points[i+j+1] out of bound for j=3
+            right_list.push_back(laserCloud->points[i+j]);
+            if (j == 3) break;
             Eigen::Vector3d temp_vector(laserCloud->points[i+j].x-laserCloud->points[i+j+1].x,
                                         laserCloud->points[i+j].y-laserCloud->points[i+j+1].y,
                                         laserCloud->points[i+j].z-laserCloud->points[i+j+1].z);
@@ -495,12 +497,12 @@ private:
 
           if (right_is_plane && (max_dis < 2*min_dis) && right_surf_dis < 0.05 * depth && cc < 0.8){
             if (depth_right < depth_left) CloudFeatureFlag_[i] = 100;
-            else if (depth_left == 0) CloudFeatureFlag_[i] = 100; // Original logic
+            else if (depth_left == 0) CloudFeatureFlag_[i] = 100;
           }
         }
       }
 
-      if (CloudFeatureFlag_[i] == 100) { // break point select
+      if (CloudFeatureFlag_[i] == 100) {
         debugnum2++;
         Eigen::Vector3d norm_front(0,0,0);
         Eigen::Vector3d norm_back(0,0,0);
@@ -531,33 +533,26 @@ private:
         } else {
           CloudFeatureFlag_[i] = 0;
         }
-        continue; // Already processed as a break point or reset
+        continue;
       }
     }
 
     for (int i = 0; i < cloudSize; i++) {
-      // Points with CloudFeatureFlag_[i] == 250 (outliers) are ignored.
       if (CloudFeatureFlag_[i] == 250) {
         continue;
       }
 
       if (CloudFeatureFlag_[i] == 100 || CloudFeatureFlag_[i] == 150) {
-        // break point or surf-surf corner
         cornerPointsSharp.push_back(laserCloud->points[i]);
       } else if (CloudFeatureFlag_[i] == 1 || CloudFeatureFlag_[i] == 0) {
-        // Original surf points (flag 1) AND 'regular' points (flag 0)
         surfPointsFlat.push_back(laserCloud->points[i]);
       }
-      // Note: This structure ensures that if a point somehow ended up with a flag like 100
-      // AND would also qualify for flag 0 (which shouldn't happen with current logic upstream),
-      // it's treated as a corner. Outliers are explicitly skipped first.
     }
 
     RCLCPP_DEBUG(this->get_logger(), "ALL point: %d, outliers: %d", cloudSize, debugnum1);
     RCLCPP_DEBUG(this->get_logger(), "break points: %d, break feature: %d", debugnum2, debugnum3);
     RCLCPP_DEBUG(this->get_logger(), "normal points: %d, surf-surf feature: %d", debugnum4, debugnum5);
 
-    // Health checks for feature counts
     int num_sharp_features = cornerPointsSharp.size();
     int num_flat_features = surfPointsFlat.size();
 
@@ -571,22 +566,42 @@ private:
     }
 
     sensor_msgs::msg::PointCloud2 laserCloudOutMsg;
-    pcl::toROSMsg(*laserCloud, laserCloudOutMsg); // Publish the original cloud with modified intensities
-    laserCloudOutMsg.header = laserCloudMsg->header; // Keep original header (stamp and frame_id)
-    // laserCloudOutMsg.header.frame_id = "/livox"; // Or ensure this is correct
+    pcl::toROSMsg(*laserCloud, laserCloudOutMsg);
+    laserCloudOutMsg.header = laserCloudMsg->header;
     pubLaserCloud_->publish(laserCloudOutMsg);
 
     sensor_msgs::msg::PointCloud2 cornerPointsSharpMsg;
     pcl::toROSMsg(cornerPointsSharp, cornerPointsSharpMsg);
     cornerPointsSharpMsg.header = laserCloudMsg->header;
-    // cornerPointsSharpMsg.header.frame_id = "/livox";
     pubCornerPointsSharp_->publish(cornerPointsSharpMsg);
 
-    sensor_msgs::msg::PointCloud2 surfPointsFlatMsg; // Renamed from surfPointsFlat2 for clarity
+    sensor_msgs::msg::PointCloud2 surfPointsFlatMsg;
     pcl::toROSMsg(surfPointsFlat, surfPointsFlatMsg);
     surfPointsFlatMsg.header = laserCloudMsg->header;
-    // surfPointsFlatMsg.header.frame_id = "/livox";
     pubSurfPointsFlat_->publish(surfPointsFlatMsg);
+
+    // Determine and publish health status
+    loam_adaptive_parameter_manager::ScanRegistrationHealth current_health = loam_adaptive_parameter_manager::ScanRegistrationHealth::HEALTHY;
+    // raw_points_low_for_health_status is already determined after initial filtering and before the return statements for low points
+    bool sharp_features_low = (num_sharp_features < min_sharp_features_param_);
+    bool flat_features_low = (num_flat_features < min_flat_features_param_);
+
+    if (raw_points_low_for_health_status) { // This reflects points *before* feature extraction logic
+        current_health = loam_adaptive_parameter_manager::ScanRegistrationHealth::LOW_RAW_POINTS;
+    } else if (sharp_features_low && flat_features_low) {
+        current_health = loam_adaptive_parameter_manager::ScanRegistrationHealth::LOW_SHARP_FEATURES;
+    } else if (sharp_features_low) {
+        current_health = loam_adaptive_parameter_manager::ScanRegistrationHealth::LOW_SHARP_FEATURES;
+    } else if (flat_features_low) {
+        current_health = loam_adaptive_parameter_manager::ScanRegistrationHealth::LOW_FLAT_FEATURES;
+    }
+    // else it remains HEALTHY
+
+    std_msgs::msg::Int32 health_msg;
+    health_msg.data = static_cast<int>(current_health);
+    if (pub_health_status_) {
+        pub_health_status_->publish(health_msg);
+    }
   }
 };
 

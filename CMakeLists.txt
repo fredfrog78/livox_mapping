@@ -154,12 +154,25 @@ if(OpenMP_FOUND)
   target_link_libraries(loam_laserMapping OpenMP::OpenMP_CXX)
 endif()
 
+add_executable(adaptive_parameter_manager_node src/adaptive_parameter_manager.cpp)
+ament_target_dependencies(adaptive_parameter_manager_node
+  rclcpp
+  std_msgs
+  # rcl_interfaces # Not directly needed for SyncParametersClient usage, but good for general awareness
+)
+# No direct PCL, OpenCV, or Eigen linking needed for adaptive_parameter_manager_node based on its current code.
+# If it were to process point clouds directly, these would be added.
+if(OpenMP_FOUND) # Though unlikely to be beneficial for this node's logic
+  target_link_libraries(adaptive_parameter_manager_node OpenMP::OpenMP_CXX)
+endif()
+
 # Install executables
 install(TARGETS
   livox_repub
   loam_scanRegistration
   loam_scanRegistration_horizon
   loam_laserMapping
+  adaptive_parameter_manager_node
   DESTINATION lib/${PROJECT_NAME}
 )
 

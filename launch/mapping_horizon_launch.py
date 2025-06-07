@@ -10,18 +10,18 @@ def generate_launch_description():
     # Declare launch arguments
     declare_rviz_arg = DeclareLaunchArgument(
         'rviz',
-        default_value='false', # Changed to false
+        default_value='false',
         description='Launch RViz if true'
     )
     declare_markers_icp_corr_arg = DeclareLaunchArgument(
         'markers_icp_corr',
         default_value='false',
-        description='Enable/disable ICP correspondence debug markers (markers_icp_corr) for loam_laserMapping'
+        description='Enable/disable ICP correspondence debug markers for loam_laserMapping'
     )
     declare_markers_sel_features_arg = DeclareLaunchArgument(
         'markers_sel_features',
         default_value='false',
-        description='Enable/disable selected feature debug markers (markers_sel_features) for loam_laserMapping'
+        description='Enable/disable selected feature debug markers for loam_laserMapping'
     )
     declare_enable_icp_debug_logs_arg = DeclareLaunchArgument(
         'enable_icp_debug_logs',
@@ -85,14 +85,28 @@ def generate_launch_description():
         description='Enable health warnings in laserMapping'
     )
 
-    # Set use_sim_time parameter
+    # Declare Launch Arguments for AdaptiveParameterManager
+    declare_apm_target_node_name_arg = DeclareLaunchArgument(
+        'apm_target_node_name',
+        default_value='loam_laserMapping', # Target the laserMapping node as named below
+        description='Target node name for AdaptiveParameterManager to control'
+    )
+    declare_apm_timer_period_sec_arg = DeclareLaunchArgument(
+        'apm_timer_period_sec',
+        default_value='1.0',
+        description='Processing timer period in seconds for AdaptiveParameterManager'
+    )
+
+    # Set use_sim_time parameter (already existed)
     set_use_sim_time = SetParameter(name='use_sim_time', value=False)
 
     # Node for loam_scanRegistration_horizon
+    # Assuming its C++ node name is 'scan_registration_horizon_node',
+    # it will publish health to /scan_registration_horizon/health_status
     node_scan_registration_horizon = Node(
         package='livox_mapping',
         executable='loam_scanRegistration_horizon',
-        name='loam_scanRegistration_horizon',
+        name='loam_scanRegistration_horizon', # ROS Node name
         output='screen',
         parameters=[
             {'health.min_raw_points_for_feature_extraction': LaunchConfiguration('sr_health_min_raw_points')},
@@ -106,12 +120,16 @@ def generate_launch_description():
     node_laser_mapping = Node(
         package='livox_mapping',
         executable='loam_laserMapping',
-        name='loam_laserMapping',
+        name='loam_laserMapping', # ROS Node name
         output='screen',
         parameters=[
             {'markers_icp_corr': LaunchConfiguration('markers_icp_corr')},
             {'markers_sel_features': LaunchConfiguration('markers_sel_features')},
             {'enable_icp_debug_logs': LaunchConfiguration('enable_icp_debug_logs')},
+            # Add default values for dynamically controlled parameters
+            {'filter_parameter_corner': 0.2},
+            {'filter_parameter_surf': 0.4},
+            # Health parameters
             {'health.min_downsampled_corner_features': LaunchConfiguration('lm_health_min_downsampled_corner_features')},
             {'health.min_downsampled_surf_features': LaunchConfiguration('lm_health_min_downsampled_surf_features')},
             {'health.min_map_corner_points_for_icp': LaunchConfiguration('lm_health_min_map_corner_points_for_icp')},
@@ -121,6 +139,22 @@ def generate_launch_description():
             {'health.max_icp_delta_translation_cm': LaunchConfiguration('lm_health_max_icp_delta_translation_cm')},
             {'health.warn_on_icp_degeneracy': LaunchConfiguration('lm_health_warn_on_icp_degeneracy')},
             {'health.enable_health_warnings': LaunchConfiguration('lm_health_enable_warnings')}
+        ]
+    )
+
+    # Node for AdaptiveParameterManager
+    node_adaptive_parameter_manager = Node(
+        package='livox_mapping',
+        executable='adaptive_parameter_manager_node',
+        name='adaptive_parameter_manager_node',
+        output='screen',
+        parameters=[
+            {'target_node_name': LaunchConfiguration('apm_target_node_name')},
+            {'timer_period_sec': LaunchConfiguration('apm_timer_period_sec')}
+        ],
+        remappings=[
+            # Remap the generic SR health topic to the specific one from scanRegistration_horizon
+            ('/scan_registration/health_status', '/scan_registration_horizon/health_status')
         ]
     )
 
@@ -136,7 +170,6 @@ def generate_launch_description():
         name='rviz2',
         arguments=['-d', rviz_config_file],
         output='screen',
-        # prefix=['nice'], # 'nice' might not be directly available or needed in the same way
         condition=IfCondition(LaunchConfiguration('rviz'))
     )
 
@@ -160,8 +193,13 @@ def generate_launch_description():
         declare_lm_health_max_icp_delta_translation_cm_arg,
         declare_lm_health_warn_on_icp_degeneracy_arg,
         declare_lm_health_enable_warnings_arg,
+        # APM args
+        declare_apm_target_node_name_arg,
+        declare_apm_timer_period_sec_arg,
+        # Actions and Nodes
         set_use_sim_time,
         node_scan_registration_horizon,
         node_laser_mapping,
+        node_adaptive_parameter_manager, # Added APM node
         node_rviz
     ])

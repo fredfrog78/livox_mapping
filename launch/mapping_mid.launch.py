@@ -72,11 +72,24 @@ def generate_launch_description():
         description='Enable health warnings in laserMapping'
     )
 
+    # Declare Launch Arguments for AdaptiveParameterManager
+    declare_apm_target_node_name_arg = DeclareLaunchArgument(
+        'apm_target_node_name',
+        default_value='laserMapping', # Target the laserMapping node as named below
+        description='Target node name for AdaptiveParameterManager to control'
+    )
+    declare_apm_timer_period_sec_arg = DeclareLaunchArgument(
+        'apm_timer_period_sec',
+        default_value='1.0',
+        description='Processing timer period in seconds for AdaptiveParameterManager'
+    )
+
     # Define the scanRegistration node
+    # Its C++ node name is 'scan_registration_node', publishing health to /scan_registration/health_status
     scan_registration_node = Node(
         package='livox_mapping',
         executable='loam_scanRegistration',
-        name='scanRegistration',
+        name='scanRegistration', # ROS Node name
         output='screen',
         parameters=[
             {'health.min_raw_points_for_feature_extraction': LaunchConfiguration('sr_health_min_raw_points')},
@@ -87,15 +100,18 @@ def generate_launch_description():
     )
 
     # Define the laserMapping node
+    # Its C++ node name is 'laser_mapping_node', publishing health to /laser_mapping/health_status
     laser_mapping_node = Node(
         package='livox_mapping',
         executable='loam_laserMapping',
-        name='laserMapping',
+        name='laserMapping', # ROS Node name
         output='screen',
         parameters=[
-            {'map_file_path': ' ',
-             'filter_parameter_corner': 0.1,
-             'filter_parameter_surf': 0.2},
+            {'map_file_path': ' '}, # Existing parameter
+            # Ensure dynamically controlled parameters have explicit defaults here
+            {'filter_parameter_corner': 0.1},
+            {'filter_parameter_surf': 0.2},
+            # Health parameters
             {'health.min_downsampled_corner_features': LaunchConfiguration('lm_health_min_downsampled_corner_features')},
             {'health.min_downsampled_surf_features': LaunchConfiguration('lm_health_min_downsampled_surf_features')},
             {'health.min_map_corner_points_for_icp': LaunchConfiguration('lm_health_min_map_corner_points_for_icp')},
@@ -108,6 +124,20 @@ def generate_launch_description():
         ]
     )
 
+    # Node for AdaptiveParameterManager
+    node_adaptive_parameter_manager = Node(
+        package='livox_mapping',
+        executable='adaptive_parameter_manager_node',
+        name='adaptive_parameter_manager_node',
+        output='screen',
+        parameters=[
+            {'target_node_name': LaunchConfiguration('apm_target_node_name')},
+            {'timer_period_sec': LaunchConfiguration('apm_timer_period_sec')}
+        ]
+        # No remappings needed as scanRegistration node here is 'scanRegistration' (C++ name 'scan_registration_node')
+        # and APM defaults to /scan_registration/health_status.
+    )
+
     # Define the RViz node configuration
     rviz_config_file = os.path.join(livox_mapping_share_dir, 'rviz_cfg', 'loam_livox.rviz')
     
@@ -117,8 +147,6 @@ def generate_launch_description():
         name='rviz2',
         arguments=['-d', rviz_config_file],
         condition=IfCondition(LaunchConfiguration('rviz'))
-        # launch_prefix=['nice'] # 'nice' is a linux command, not typically used directly in launch_prefix this way in ROS2. 
-                                 # If niceness is required, it's better handled outside or via system configuration.
     )
 
     # Create the launch description and populate
@@ -139,9 +167,13 @@ def generate_launch_description():
     ld.add_action(declare_lm_health_max_icp_delta_translation_cm_arg)
     ld.add_action(declare_lm_health_warn_on_icp_degeneracy_arg)
     ld.add_action(declare_lm_health_enable_warnings_arg)
+    # Add APM launch arguments
+    ld.add_action(declare_apm_target_node_name_arg)
+    ld.add_action(declare_apm_timer_period_sec_arg)
 
     ld.add_action(scan_registration_node)
     ld.add_action(laser_mapping_node)
-    ld.add_action(rviz_node) # RViz node itself handles the IfCondition
+    ld.add_action(node_adaptive_parameter_manager) # Added APM node
+    ld.add_action(rviz_node)
 
     return ld

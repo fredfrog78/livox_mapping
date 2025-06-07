@@ -46,6 +46,9 @@
 #include <cmath>
 #include <algorithm> // For std::fill
 
+#include "adaptive_parameter_manager_types.h" // For health status enums
+#include "std_msgs/msg/int32.hpp" // To publish enum as integer
+
 // Note: Original code used PointXYZINormal for this file
 typedef pcl::PointXYZINormal PointType; 
 const int MAX_CLOUD_SIZE_HORIZON = 32000; // Maximum cloud size to process for this node
@@ -65,6 +68,7 @@ public:
     pubLaserCloud_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/livox_cloud_horizon", 20); // Topic renamed for clarity
     pubCornerPointsSharp_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/laser_cloud_sharp_horizon", 20);
     pubSurfPointsFlat_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/laser_cloud_flat_horizon", 20);
+    pub_health_status_ = this->create_publisher<std_msgs::msg::Int32>("/scan_registration_horizon/health_status", 10);
     
     // pubLaserCloud_temp_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/livox/lidar_temp_horizon", 2); // For hkmars_data (commented out)
 
@@ -106,6 +110,7 @@ private:
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubLaserCloud_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubCornerPointsSharp_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubSurfPointsFlat_;
+  rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr pub_health_status_;
   // rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubLaserCloud_temp_;
 
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr subLaserCloud_;
@@ -213,57 +218,55 @@ private:
     PointType point;
     std::vector<pcl::PointCloud<PointType>> laserCloudScans(N_SCANS_);
     for (int i = 0; i < N_SCANS_; ++i) {
-        laserCloudScans[i].clear(); // Clear points from previous scan
-        laserCloudScans[i].reserve(cloudSize / N_SCANS_); // Pre-allocate memory
+        laserCloudScans[i].clear();
+        laserCloudScans[i].reserve(cloudSize / N_SCANS_);
     }
 
     for (int i = 0; i < cloudSize; i++) {
       point.x = laserCloudIn.points[i].x;
       point.y = laserCloudIn.points[i].y;
       point.z = laserCloudIn.points[i].z;
-      // For PointXYZINormal, intensity and normal fields are available.
-      // Original code used intensity to store scanID for N_SCANS=6.
-      // And curvature was also copied.
       point.intensity = laserCloudIn.points[i].intensity; 
       point.curvature = laserCloudIn.points[i].curvature; 
       
       int scanID = 0;
-      // This logic assumes point.intensity carries the scan ring ID.
-      // This is a common practice with some Velodyne drivers, but for Livox,
-      // the `livox_repub` node prepares intensity as line_number + reflectivity_fraction
-      // and curvature as a normalized timestamp.
-      // If N_SCANS_ is used, the input cloud *must* have intensity correctly populated
-      // to represent the scan ring/line ID for this logic to work.
-      if (N_SCANS_ > 1) { // Only try to get scanID if N_SCANS_ suggests multiple scans
+      if (N_SCANS_ > 1) {
           scanID = static_cast<int>(point.intensity); 
       }
 
       if (scanID >= 0 && scanID < N_SCANS_) {
         laserCloudScans[scanID].push_back(point);
-      } else if (N_SCANS_ == 1) { // If N_SCANS is 1, put all points in the first scan
+      } else if (N_SCANS_ == 1) {
         laserCloudScans[0].push_back(point);
       }
-      // else: point is dropped if scanID is out of expected range for N_SCANS > 1
     }
 
     pcl::PointCloud<PointType>::Ptr laserCloud(new pcl::PointCloud<PointType>());
-    laserCloud->reserve(cloudSize); // Pre-allocate
+    laserCloud->reserve(cloudSize);
     for (int i = 0; i < N_SCANS_; i++) {
       *laserCloud += laserCloudScans[i];
     }
 
-    cloudSize = laserCloud->size();
-    if (enable_health_warnings_param_ && cloudSize < min_raw_points_param_) {
+    cloudSize = laserCloud->size(); // This is cloudSize after scan separation
+    bool raw_points_low_for_health = (cloudSize < min_raw_points_param_);
+
+    if (enable_health_warnings_param_ && raw_points_low_for_health) {
         RCLCPP_WARN(this->get_logger(), "Horizon: Not enough raw points (%d) for feature extraction after scan separation. Minimum required: %d", cloudSize, min_raw_points_param_);
+        if (pub_health_status_){
+            std_msgs::msg::Int32 health_msg;
+            health_msg.data = static_cast<int>(loam_adaptive_parameter_manager::ScanRegistrationHealth::LOW_RAW_POINTS);
+            pub_health_status_->publish(health_msg);
+        }
         return;
-    } else if (!enable_health_warnings_param_ && cloudSize < min_raw_points_param_) {
+    } else if (!enable_health_warnings_param_ && raw_points_low_for_health) {
         RCLCPP_DEBUG(this->get_logger(), "Horizon: Not enough raw points (%d) for feature extraction after scan separation (minimum required: %d), but health warnings are disabled.", cloudSize, min_raw_points_param_);
-        // Similar to scanRegistration.cpp, an absolute minimum to prevent crashes.
-        // The feature extraction loop starts at i=5 and goes to cloudSize-5.
-        // So cloudSize must be at least 10 for the loop to run even once without issues.
-        // A value like 10 or 11 ensures i +/- 5 accesses are valid.
-        if (cloudSize < 10) {
-             RCLCPP_ERROR(this->get_logger(), "Horizon: Critically low number of points (%d) after scan separation, even with health warnings disabled. Cannot safely proceed.", cloudSize);
+        if (cloudSize < 10) { // Absolute minimum
+             RCLCPP_ERROR(this->get_logger(), "Horizon: Critically low number of points (%d) after scan separation. Cannot safely proceed.", cloudSize);
+             if (pub_health_status_){
+                std_msgs::msg::Int32 health_msg;
+                health_msg.data = static_cast<int>(loam_adaptive_parameter_manager::ScanRegistrationHealth::LOW_RAW_POINTS);
+                pub_health_status_->publish(health_msg);
+            }
              return;
         }
     }
@@ -278,8 +281,6 @@ private:
     bool left_surf_flag = false, right_surf_flag = false;
 
     for (int i = 5; i < cloudSize - 5; i += count_num ) {
-      // float depth = (Eigen::Vector3f(laserCloud->points[i].x, laserCloud->points[i].y, laserCloud->points[i].z)).norm();
-
       float ldiffX = laserCloud->points[i-4].x + laserCloud->points[i-3].x - 4*laserCloud->points[i-2].x + laserCloud->points[i-1].x + laserCloud->points[i].x;
       float ldiffY = laserCloud->points[i-4].y + laserCloud->points[i-3].y - 4*laserCloud->points[i-2].y + laserCloud->points[i-1].y + laserCloud->points[i].y;
       float ldiffZ = laserCloud->points[i-4].z + laserCloud->points[i-3].z - 4*laserCloud->points[i-2].z + laserCloud->points[i-1].z + laserCloud->points[i].z;
@@ -384,8 +385,6 @@ private:
           std::vector<PointType> right_list; right_list.reserve(4);
           double min_dis = 10000, max_dis = 0;
           for(int j=0; j<4; ++j) {
-            // Original code: right_list.push_back(laserCloud->points[i-j]); This seems to be a copy-paste error from the left_list logic.
-            // Should be points on the right side: laserCloud->points[i+j]
             right_list.push_back(laserCloud->points[i+j]); 
             if (j==3) break;
             Eigen::Vector3d tmp_v(laserCloud->points[i+j].x-laserCloud->points[i+j+1].x, laserCloud->points[i+j].y-laserCloud->points[i+j+1].y, laserCloud->points[i+j].z-laserCloud->points[i+j+1].z);
@@ -420,13 +419,6 @@ private:
     }
 
     for (int i = 0; i < cloudSize; i++) {
-      // The original code for scanRegistration.cpp (not horizon) had a line here to set intensity:
-      // laserCloud->points[i].intensity = double(CloudFeatureFlag_[i]) / 10000;
-      // This was commented out in my previous refactoring of scanRegistration.cpp.
-      // For scanRegistration_horizon.cpp, the intensity field is used for scanID input.
-      // So, it should not be overwritten here with feature flags.
-      // The PointType is PointXYZINormal, so .normal and .curvature fields are available if needed for output.
-
       if (CloudFeatureFlag_[i] == 1) {
         surfPointsFlat.push_back(laserCloud->points[i]);
       } else if (CloudFeatureFlag_[i] == 100 || CloudFeatureFlag_[i] == 150) {
@@ -435,11 +427,9 @@ private:
     }
     
     RCLCPP_DEBUG(this->get_logger(), "Horizon - ALL point: %d, outliers: %d", cloudSize, debugnum1);
-    RCLCPP_DEBUG(this->get_logger(), "Horizon - ALL point: %d, outliers: %d", cloudSize, debugnum1);
     RCLCPP_DEBUG(this->get_logger(), "Horizon - break points: %d, break feature: %d", debugnum2, debugnum3);
     RCLCPP_DEBUG(this->get_logger(), "Horizon - normal points: %d, surf-surf feature: %d", debugnum4, debugnum5);
 
-    // Health checks for feature counts
     int num_sharp_features = cornerPointsSharp.size();
     int num_flat_features = surfPointsFlat.size();
 
@@ -452,11 +442,9 @@ private:
         }
     }
 
-    // Publish results
     sensor_msgs::msg::PointCloud2 laserCloudOutMsg;
     pcl::toROSMsg(*laserCloud, laserCloudOutMsg);
     laserCloudOutMsg.header = laserCloudMsg->header;
-    // laserCloudOutMsg.header.frame_id = "/livox"; // ensure this is correct, or use from input msg
     pubLaserCloud_->publish(laserCloudOutMsg);
 
     sensor_msgs::msg::PointCloud2 cornerPointsSharpMsg;
@@ -468,6 +456,28 @@ private:
     pcl::toROSMsg(surfPointsFlat, surfPointsFlatMsg);
     surfPointsFlatMsg.header = laserCloudMsg->header;
     pubSurfPointsFlat_->publish(surfPointsFlatMsg);
+
+    // Determine and publish health status
+    loam_adaptive_parameter_manager::ScanRegistrationHealth current_health = loam_adaptive_parameter_manager::ScanRegistrationHealth::HEALTHY;
+    // raw_points_low_for_health is determined after scan separation and before early return for low points.
+    bool sharp_features_low = (num_sharp_features < min_sharp_features_param_);
+    bool flat_features_low = (num_flat_features < min_flat_features_param_);
+
+    if (raw_points_low_for_health) {
+        current_health = loam_adaptive_parameter_manager::ScanRegistrationHealth::LOW_RAW_POINTS;
+    } else if (sharp_features_low && flat_features_low) {
+        current_health = loam_adaptive_parameter_manager::ScanRegistrationHealth::LOW_SHARP_FEATURES;
+    } else if (sharp_features_low) {
+        current_health = loam_adaptive_parameter_manager::ScanRegistrationHealth::LOW_SHARP_FEATURES;
+    } else if (flat_features_low) {
+        current_health = loam_adaptive_parameter_manager::ScanRegistrationHealth::LOW_FLAT_FEATURES;
+    }
+
+    std_msgs::msg::Int32 health_msg;
+    health_msg.data = static_cast<int>(current_health);
+    if (pub_health_status_) {
+        pub_health_status_->publish(health_msg);
+    }
   }
 };
 
