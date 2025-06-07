@@ -70,7 +70,7 @@ private:
     rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr sr_health_sub_;
     rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr lm_health_sub_; // Could add one for _horizon variant
     rclcpp::TimerBase::SharedPtr processing_timer_;
-    std::shared_ptr<rclcpp::SyncParametersClient> laser_mapping_param_client_;
+    std::shared_ptr<rclcpp::AsyncParametersClient> laser_mapping_param_client_; // Changed to Async
     std::string laser_mapping_node_name_ = "laser_mapping_node"; // Target node name
 };
 
