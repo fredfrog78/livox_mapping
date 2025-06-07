@@ -120,11 +120,11 @@ public:
 
     // Declare and get health monitoring parameters
     this->declare_parameter<bool>("health.enable_health_warnings", true);
-    this->declare_parameter<int>("health.min_downsampled_corner_features", 10);
+    this->declare_parameter<int>("health.min_downsampled_corner_features", 12);
     this->declare_parameter<int>("health.min_downsampled_surf_features", 30);
-    this->declare_parameter<int>("health.min_map_corner_points_for_icp", 50);
-    this->declare_parameter<int>("health.min_map_surf_points_for_icp", 200);
-    this->declare_parameter<int>("health.min_icp_correspondences", 75);
+    this->declare_parameter<int>("health.min_map_corner_points_for_icp", 30);
+    this->declare_parameter<int>("health.min_map_surf_points_for_icp", 100);
+    this->declare_parameter<int>("health.min_icp_correspondences", 40);
     this->declare_parameter<double>("health.max_icp_delta_rotation_deg", 5.0);
     this->declare_parameter<double>("health.max_icp_delta_translation_cm", 20.0);
     this->declare_parameter<bool>("health.warn_on_icp_degeneracy", true);

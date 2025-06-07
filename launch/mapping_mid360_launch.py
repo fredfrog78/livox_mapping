@@ -50,11 +50,11 @@ def generate_launch_description():
         description='Min raw points for feature extraction in scanRegistration'
     )
     declare_sr_health_min_sharp_features_arg = DeclareLaunchArgument(
-        'sr_health_min_sharp_features', default_value='20',
+        'sr_health_min_sharp_features', default_value='15',
         description='Min sharp features in scanRegistration'
     )
     declare_sr_health_min_flat_features_arg = DeclareLaunchArgument(
-        'sr_health_min_flat_features', default_value='50',
+        'sr_health_min_flat_features', default_value='40',
         description='Min flat features in scanRegistration'
     )
     declare_sr_health_enable_warnings_arg = DeclareLaunchArgument(
@@ -64,7 +64,7 @@ def generate_launch_description():
 
     # Declare health monitoring launch arguments for laserMapping
     declare_lm_health_min_downsampled_corner_features_arg = DeclareLaunchArgument(
-        'lm_health_min_downsampled_corner_features', default_value='10',
+        'lm_health_min_downsampled_corner_features', default_value='12',
         description='Min downsampled corner features in laserMapping'
     )
     declare_lm_health_min_downsampled_surf_features_arg = DeclareLaunchArgument(
@@ -72,15 +72,15 @@ def generate_launch_description():
         description='Min downsampled surf features in laserMapping'
     )
     declare_lm_health_min_map_corner_points_for_icp_arg = DeclareLaunchArgument(
-        'lm_health_min_map_corner_points_for_icp', default_value='50',
+        'lm_health_min_map_corner_points_for_icp', default_value='30',
         description='Min map corner points for ICP in laserMapping'
     )
     declare_lm_health_min_map_surf_points_for_icp_arg = DeclareLaunchArgument(
-        'lm_health_min_map_surf_points_for_icp', default_value='200',
+        'lm_health_min_map_surf_points_for_icp', default_value='100',
         description='Min map surf points for ICP in laserMapping'
     )
     declare_lm_health_min_icp_correspondences_arg = DeclareLaunchArgument(
-        'lm_health_min_icp_correspondences', default_value='75',
+        'lm_health_min_icp_correspondences', default_value='40',
         description='Min ICP correspondences in laserMapping'
     )
     declare_lm_health_max_icp_delta_rotation_deg_arg = DeclareLaunchArgument(

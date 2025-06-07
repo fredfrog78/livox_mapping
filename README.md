@@ -168,10 +168,10 @@ These parameters control warnings related to the feature extraction process. The
 *   **`health.min_raw_points_for_feature_extraction`** (int, default: 10)
     *   **Purpose:** Minimum number of points required in the input cloud (after basic filtering like NaN removal) to proceed with feature extraction.
     *   **Warning Implication:** A warning indicates that the input cloud is too sparse. This could be due to issues with the LiDAR, driver, or `livox_repub` node, or an extremely sparse environment.
-*   **`health.min_sharp_features`** (int, default: 20)
+*   **`health.min_sharp_features`** (int, default: 15)
     *   **Purpose:** Minimum number of sharp (corner) features to be extracted.
     *   **Warning Implication:** Low sharp feature count might suggest a geometrically und-diverse environment (e.g., long corridors, open fields), or that the LiDAR data is not conducive to strong corner detection (e.g., noisy data, insufficient point density on edges).
-*   **`health.min_flat_features`** (int, default: 50)
+*   **`health.min_flat_features`** (int, default: 40)
     *   **Purpose:** Minimum number of flat (surface) features to be extracted.
     *   **Warning Implication:** Similar to sharp features, a low count for flat features can indicate a lack of planar surfaces in the environment or issues with point cloud quality for surface fitting.
 
@@ -179,19 +179,19 @@ These parameters control warnings related to the feature extraction process. The
 
 These parameters control warnings related to the scan-to-map matching and map update process in the `loam_laserMapping` node.
 
-*   **`health.min_downsampled_corner_features`** (int, default: 10)
+*   **`health.min_downsampled_corner_features`** (int, default: 12)
     *   **Purpose:** Minimum number of corner features from the current scan after voxel grid downsampling, before attempting ICP.
     *   **Warning Implication:** Very few corner features post-downsampling might lead to poor constraints for ICP, especially rotation.
 *   **`health.min_downsampled_surf_features`** (int, default: 30)
     *   **Purpose:** Minimum number of surface features from the current scan after voxel grid downsampling.
     *   **Warning Implication:** Insufficient surface features can weaken the ICP solution, particularly for translation.
-*   **`health.min_map_corner_points_for_icp`** (int, default: 50)
+*   **`health.min_map_corner_points_for_icp`** (int, default: 30)
     *   **Purpose:** Minimum number of corner points retrieved from the local map to be used as target points for ICP.
     *   **Warning Implication:** If the local map doesn't have enough corner points in the vicinity of the current scan, ICP might be unreliable or skipped. This could indicate poor localization or an unexplored area.
-*   **`health.min_map_surf_points_for_icp`** (int, default: 200)
+*   **`health.min_map_surf_points_for_icp`** (int, default: 100)
     *   **Purpose:** Minimum number of surface points retrieved from the local map for ICP.
     *   **Warning Implication:** Similar to map corner points, a low count here suggests an insufficient local map for robust surface feature matching.
-*   **`health.min_icp_correspondences`** (int, default: 75)
+*   **`health.min_icp_correspondences`** (int, default: 40)
     *   **Purpose:** Minimum number of selected point correspondences (both corner and surface) used in the ICP optimization step.
     *   **Warning Implication:** Fewer correspondences than this threshold (but above the critical minimum of 50 which skips optimization) suggest a weak geometric link between the current scan and the map, potentially leading to less accurate pose updates.
 *   **`health.max_icp_delta_rotation_deg`** (double, default: 5.0)

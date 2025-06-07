@@ -91,8 +91,8 @@ public:
     // Declare and get health monitoring parameters
     this->declare_parameter<bool>("health.enable_health_warnings", true);
     this->declare_parameter<int>("health.min_raw_points_for_feature_extraction", 10);
-    this->declare_parameter<int>("health.min_sharp_features", 20);
-    this->declare_parameter<int>("health.min_flat_features", 50);
+    this->declare_parameter<int>("health.min_sharp_features", 15);
+    this->declare_parameter<int>("health.min_flat_features", 40);
 
     this->get_parameter("health.enable_health_warnings", enable_health_warnings_param_);
     this->get_parameter("health.min_raw_points_for_feature_extraction", min_raw_points_param_);
