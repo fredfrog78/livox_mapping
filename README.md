@@ -155,6 +155,106 @@ This section describes common topics. Actual topic names for feature clouds migh
 ## 6. Services
 No ROS 2 services are explicitly defined by these nodes in the reviewed C++ code.
 
+## Pipeline Health Monitoring
+
+This feature is designed to help diagnose potential issues within the SLAM pipeline by providing warnings when key operational metrics fall outside expected ranges. It works by logging `RCLCPP_WARN` messages when these metrics cross pre-configured thresholds.
+
+A master switch, `health.enable_health_warnings` (boolean, default: `true`), is available for both the feature extraction (`scanRegistration`/`scanRegistration_horizon`) and `laserMapping` nodes. Setting this to `false` will suppress all health-related warnings from that specific node.
+
+### Health Parameters for `scanRegistration` / `scanRegistration_horizon`
+
+These parameters control warnings related to the feature extraction process. They are applicable to both `loam_scanRegistration` and `loam_scanRegistration_horizon` executables.
+
+*   **`health.min_raw_points_for_feature_extraction`** (int, default: 10)
+    *   **Purpose:** Minimum number of points required in the input cloud (after basic filtering like NaN removal) to proceed with feature extraction.
+    *   **Warning Implication:** A warning indicates that the input cloud is too sparse. This could be due to issues with the LiDAR, driver, or `livox_repub` node, or an extremely sparse environment.
+*   **`health.min_sharp_features`** (int, default: 20)
+    *   **Purpose:** Minimum number of sharp (corner) features to be extracted.
+    *   **Warning Implication:** Low sharp feature count might suggest a geometrically und-diverse environment (e.g., long corridors, open fields), or that the LiDAR data is not conducive to strong corner detection (e.g., noisy data, insufficient point density on edges).
+*   **`health.min_flat_features`** (int, default: 50)
+    *   **Purpose:** Minimum number of flat (surface) features to be extracted.
+    *   **Warning Implication:** Similar to sharp features, a low count for flat features can indicate a lack of planar surfaces in the environment or issues with point cloud quality for surface fitting.
+
+### Health Parameters for `laserMapping`
+
+These parameters control warnings related to the scan-to-map matching and map update process in the `loam_laserMapping` node.
+
+*   **`health.min_downsampled_corner_features`** (int, default: 10)
+    *   **Purpose:** Minimum number of corner features from the current scan after voxel grid downsampling, before attempting ICP.
+    *   **Warning Implication:** Very few corner features post-downsampling might lead to poor constraints for ICP, especially rotation.
+*   **`health.min_downsampled_surf_features`** (int, default: 30)
+    *   **Purpose:** Minimum number of surface features from the current scan after voxel grid downsampling.
+    *   **Warning Implication:** Insufficient surface features can weaken the ICP solution, particularly for translation.
+*   **`health.min_map_corner_points_for_icp`** (int, default: 50)
+    *   **Purpose:** Minimum number of corner points retrieved from the local map to be used as target points for ICP.
+    *   **Warning Implication:** If the local map doesn't have enough corner points in the vicinity of the current scan, ICP might be unreliable or skipped. This could indicate poor localization or an unexplored area.
+*   **`health.min_map_surf_points_for_icp`** (int, default: 200)
+    *   **Purpose:** Minimum number of surface points retrieved from the local map for ICP.
+    *   **Warning Implication:** Similar to map corner points, a low count here suggests an insufficient local map for robust surface feature matching.
+*   **`health.min_icp_correspondences`** (int, default: 75)
+    *   **Purpose:** Minimum number of selected point correspondences (both corner and surface) used in the ICP optimization step.
+    *   **Warning Implication:** Fewer correspondences than this threshold (but above the critical minimum of 50 which skips optimization) suggest a weak geometric link between the current scan and the map, potentially leading to less accurate pose updates.
+*   **`health.max_icp_delta_rotation_deg`** (double, default: 5.0)
+    *   **Purpose:** Maximum rotational correction (in degrees) applied by a single ICP iteration.
+    *   **Warning Implication:** A very large rotational correction can indicate unstable tracking, a jump in localization, or issues with initial pose prediction.
+*   **`health.max_icp_delta_translation_cm`** (double, default: 20.0)
+    *   **Purpose:** Maximum translational correction (in centimeters) applied by a single ICP iteration.
+    *   **Warning Implication:** Similar to large rotational corrections, significant translational jumps suggest instability or poor prior pose estimates.
+*   **`health.warn_on_icp_degeneracy`** (bool, default: true)
+    *   **Purpose:** Whether to log a warning if the ICP optimization encounters a degenerate geometry (e.g., trying to solve for translation along a corridor where only rotation is well-constrained).
+    *   **Warning Implication:** Indicates that the current scan and map geometry do not provide enough constraints for a full 6-DOF pose update, potentially leading to drift in certain directions.
+
+### Configuring Health Parameters in Launch Files
+
+You can adjust these health monitoring thresholds via launch arguments in the Python launch files. For example, in `mapping_mid.launch.py` (or `mapping_horizon_launch.py`, `mapping_mid360_launch.py`, `mapping_outdoor_launch.py`):
+
+1.  **Declare the launch argument:**
+    ```python
+    # In the launch file, e.g., mapping_mid.launch.py
+    declare_sr_health_min_sharp_features_arg = DeclareLaunchArgument(
+        'sr_health_min_sharp_features', default_value='20', # Default is 20
+        description='Min sharp features in scanRegistration'
+    )
+    declare_lm_health_min_icp_correspondences_arg = DeclareLaunchArgument(
+        'lm_health_min_icp_correspondences', default_value='75', # Default is 75
+        description='Min ICP correspondences in laserMapping'
+    )
+    ```
+
+2.  **Pass it to the node:**
+    ```python
+    # For scan_registration_node
+    parameters=[
+        {'health.min_sharp_features': LaunchConfiguration('sr_health_min_sharp_features')},
+        # ... other sr params
+    ]
+
+    # For laser_mapping_node
+    parameters=[
+        # ... other lm params like markers_icp_corr
+        {'health.min_icp_correspondences': LaunchConfiguration('lm_health_min_icp_correspondences')},
+        # ... other lm health params
+    ]
+    ```
+
+3.  **Add the declared argument to the `LaunchDescription` list:**
+    ```python
+    ld.add_action(declare_sr_health_min_sharp_features_arg)
+    ld.add_action(declare_lm_health_min_icp_correspondences_arg)
+    ```
+
+4.  **Override from the command line when launching:**
+    ```bash
+    ros2 launch livox_mapping mapping_mid.launch.py sr_health_min_sharp_features:=15 lm_health_min_icp_correspondences:=60
+    ```
+
+### Example: Tuning for Specific Environments
+
+Feedback from users, such as experiences in underground carparks, has highlighted scenarios where default feature detection thresholds might be too high. In such geometrically challenging environments (e.g., feature-poor, repetitive structures), if you observe frequent warnings about low feature counts (e.g., "Number of sharp features (X) is below threshold (Y)"), you might consider:
+*   Reducing `sr_health_min_sharp_features` or `sr_health_min_flat_features`.
+*   Subsequently, you might also need to adjust `lm_health_min_downsampled_corner_features`, `lm_health_min_downsampled_surf_features`, and `lm_health_min_icp_correspondences` if the input to `laserMapping` is consistently lower in features.
+Lowering these thresholds can help the system continue tracking in sparse environments, but be mindful that it might also make the system more susceptible to incorrect matches if set too low. Always monitor the output odometry and map quality after tuning.
+
 ## 7. Usage (Running the Demo)
 
 ### 7.1. General Launching Strategy
