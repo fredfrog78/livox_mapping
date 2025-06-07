@@ -346,6 +346,49 @@ The original README provided links to ROS 1 bag files. These can be converted to
 *   **TF Frames:** The transform `camera_init` -> `aft_mapped` published by `laserMapping` may need adjustments in its RPY mapping depending on your specific robot configuration and desired ROS coordinate frame conventions (e.g., REP-103/REP-105). Visual verification in RViz is crucial.
 *   **Livox Mid360:** The provided `mapping_mid360.launch.py` uses the generic `loam_scanRegistration` node. The performance and feature extraction quality with Mid360's unique scan pattern should be carefully evaluated. Parameters within `laserMapping` (e.g., filter sizes) or the choice of feature extractor might require tuning for optimal results with Mid360.
 
+## Proposed Online Adaptive Parameter Adjustment Method
+
+To enhance the robustness and performance of the LOAM pipeline under varying conditions, an online data-driven method for automatically adjusting pipeline parameters is proposed. This method is encapsulated by a conceptual `AdaptiveParameterManager` node.
+
+### Purpose
+The `AdaptiveParameterManager` aims to:
+- Maintain healthy LOAM operation by dynamically tuning key parameters of the `laserMapping` node.
+- Adapt to changing input data quality (e.g., feature-rich vs. feature-poor environments).
+- Balance odometry performance and computational resource usage.
+
+### Core Logic
+The `AdaptiveParameterManager` would operate as follows:
+
+1.  **Health Monitoring (Conceptual):**
+    *   It would subscribe to health status messages published by the `scanRegistration` and `laserMapping` nodes. These messages would indicate states such as low feature counts, ICP instability (large corrections, degeneracy), or healthy operation.
+    *   (Currently, `scanRegistration` and `laserMapping` only log warnings. They would need modification to publish structured health messages on dedicated ROS 2 topics).
+
+2.  **Parameter Adjustment:**
+    *   The primary parameters managed are `filter_parameter_corner` and `filter_parameter_surf` in the `laserMapping` node. These control the leaf sizes of voxel grid filters for downsampling corner and surface points.
+    *   **If `laserMapping` reports too few features for ICP:** The manager reduces filter sizes to provide more points to the ICP algorithm.
+    *   **If `laserMapping` reports ICP instability (e.g., large corrections, degeneracy):**
+        *   If `scanRegistration` also reports few raw features (poor input), filter sizes in `laserMapping` are cautiously reduced.
+        *   If `scanRegistration` is healthy (rich input), filter sizes are increased, as instability might be due to excessive/noisy points in dense environments.
+    *   **If the system is healthy:** Filter sizes are slowly increased to probe for potential resource savings, as long as health remains good.
+
+3.  **Simulated Resource Usage Feedback / Overload Detection:**
+    *   To prevent the system from becoming unstable due to processing too many points (e.g., after reducing filter sizes too much), a cooldown mechanism is implemented:
+        *   If parameter adjustments lead to a configurable number of consecutive ICP instability warnings, the system is considered "overloaded."
+        *   During overload cooldown, filter sizes are temporarily increased to stabilize the pipeline, and further reductions are paused.
+        *   The cooldown period is reset after a sustained period of healthy operation.
+
+### Conceptual Integration with LOAM
+-   **Health Publication:** `scanRegistration` and `laserMapping` nodes would need to be enhanced to publish their health status (defined in `adaptive_parameter_manager_types.h`) on new ROS 2 topics.
+-   **Parameter Updates:** `AdaptiveParameterManager` would use a ROS 2 parameter client to dynamically set `filter_parameter_corner` and `filter_parameter_surf` on the `laserMapping` node. The `laserMapping` node would need to be modified to support dynamic parameter updates (e.g., using parameter callbacks) and apply these changes to its voxel grid filters.
+
+### Current Status
+-   The `AdaptiveParameterManager` class, along with its decision logic and health type definitions, has been designed and implemented.
+-   The new files are:
+    -   `src/adaptive_parameter_manager.h`
+    -   `src/adaptive_parameter_manager.cpp`
+    -   `src/adaptive_parameter_manager_types.h`
+-   Full integration (modifying existing LOAM nodes for health publication and dynamic parameter handling) is a separate, subsequent task. This proposal focuses on the methodology and the standalone manager's logic.
+
 ## 10. Acknowledgments
 This package is based on the original LOAM algorithm by J. Zhang and S. Singh. We also acknowledge inspiration and reference from LOAM_NOTED.
 *   LOAM: J. Zhang and S. Singh. LOAM: Lidar Odometry and Mapping in Real-time. Robotics: Science and Systems Conference (RSS). Berkeley, CA, July 2014.
