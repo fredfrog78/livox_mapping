@@ -33,9 +33,18 @@ private:
     void updateLaserMappingHealth(LaserMappingHealth lm_health);
 
     // Internal state variables
-    ScanRegistrationHealth latest_sr_health_;
-    LaserMappingHealth latest_lm_health_;
-    SystemHealth current_system_health_;
+    ScanRegistrationHealth latest_sr_health_; // Raw health from topic
+    LaserMappingHealth latest_lm_health_;   // Raw health from topic
+    ScanRegistrationHealth stabilized_sr_health_; // Health after meeting stability threshold
+    LaserMappingHealth stabilized_lm_health_;   // Health after meeting stability threshold
+
+    int sr_health_consecutive_count_;     // Counter for consecutive reports of latest_sr_health_
+    int lm_health_consecutive_count_;     // Counter for consecutive reports of latest_lm_health_
+
+    // Threshold for considering a health state "stabilized"
+    static const int HEALTH_REPORT_STABILITY_THRESHOLD_ = 2; // e.g., must be reported twice consecutively
+
+    SystemHealth current_system_health_; // Overall system health based on stabilized inputs
     AdaptiveMode current_adaptive_mode_;
 
     // Current values of adaptable parameters
@@ -59,6 +68,7 @@ private:
     int consecutive_healthy_cycles_;
     static const int ICP_ISSUE_THRESHOLD_FOR_OVERLOAD_ = 3;
     static const int HEALTHY_CYCLES_TO_RESET_COOLDOWN_ = 5;
+    static const int PROBING_AFTER_N_HEALTHY_CYCLES_ = 2; // Wait for N healthy cycles before probing
     bool overload_cooldown_active_;
 
     // Helper methods for decision logic

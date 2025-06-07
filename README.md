@@ -370,6 +370,8 @@ The `AdaptiveParameterManager` would operate as follows:
         *   If `scanRegistration` also reports few raw features (poor input), filter sizes in `laserMapping` are cautiously reduced.
         *   If `scanRegistration` is healthy (rich input), filter sizes are increased, as instability might be due to excessive/noisy points in dense environments.
     *   **If the system is healthy:** Filter sizes are slowly increased to probe for potential resource savings, as long as health remains good.
+    *   **Health State Smoothing:** To prevent reactions to transient fluctuations, the manager now considers a health status from `scanRegistration` or `laserMapping` as "stabilized" only if it's reported consecutively for a defined number of times (currently hardcoded as `HEALTH_REPORT_STABILITY_THRESHOLD_ = 2`). Decisions are based on these stabilized states.
+    *   **Cautious Healthy Probing:** When the overall system health becomes `HEALTHY`, the manager waits for a defined number of cycles (`PROBING_AFTER_N_HEALTHY_CYCLES_ = 2`) during which health remains stable before attempting to increase filter sizes (probing for resource savings). This ensures stability before making parameters more aggressive.
 
 3.  **Simulated Resource Usage Feedback / Overload Detection:**
     *   To prevent the system from becoming unstable due to processing too many points (e.g., after reducing filter sizes too much), a cooldown mechanism is implemented:
