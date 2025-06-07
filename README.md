@@ -391,6 +391,7 @@ The `AdaptiveParameterManager` would operate as follows:
     -   `src/adaptive_parameter_manager_types.h`
 -   Full integration (modifying existing LOAM nodes for health publication and dynamic parameter handling) is a separate, subsequent task. This proposal focuses on the methodology and the standalone manager's logic.
 -   The `AdaptiveParameterManager` internally uses a ROS 2 asynchronous parameter client for setting parameters on the `laserMapping` node. This ensures non-blocking behavior within the manager's own processing loop and resolves potential executor conflicts.
+-   For more detailed information on the internal logic, specific thresholds, assumptions, and implementation notes, please refer to the comprehensive documentation comments within the `src/adaptive_parameter_manager.h` and `src/adaptive_parameter_manager.cpp` files.
 
 ## 10. Acknowledgments
 This package is based on the original LOAM algorithm by J. Zhang and S. Singh. We also acknowledge inspiration and reference from LOAM_NOTED.
