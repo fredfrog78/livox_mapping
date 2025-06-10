@@ -55,12 +55,17 @@ public:
     void publicInitializeParameters() { initializeParameters(); }
 
     // Expose internal thresholds for verification against defaults
-    double getCpuHighThreshold() { return cpu_load_threshold_high_; }
+    double getCpuHighThreshold() const { return cpu_load_threshold_high_; }
+    double getCpuCriticalThreshold() const { return this->cpu_load_threshold_critical_; }
+    double getPipelineLatencyHighThresholdSec() const { return this->pipeline_latency_threshold_high_sec_; }
     // Add other getters for private members if needed for tests
-    int getMinICPIterations() { return min_icp_iterations_; }
-    int getMaxICPIterations() { return max_icp_iterations_; }
-    int getDefaultICPIterations() { return default_icp_iterations_; }
-    int getICPIterationAdjustmentStep() { return icp_iteration_adjustment_step_; }
+    int getMinICPIterations() const { return min_icp_iterations_; }
+    int getMaxICPIterations() const { return max_icp_iterations_; }
+    int getDefaultICPIterations() const { return default_icp_iterations_; }
+    int getICPIterationAdjustmentStep() const { return icp_iteration_adjustment_step_; }
+
+    // Setter for parameters
+    void setICPIterations(int iterations) { this->current_icp_iterations_ = iterations; }
 
     // Making const values accessible for tests - No longer needed here, access directly from AdaptiveParameterManager public static members
     // static const int TEST_ICP_ISSUE_THRESHOLD_FOR_OVERLOAD_ = 3;
@@ -117,13 +122,13 @@ TEST_F(AdaptiveParameterManagerTest, DetermineHealth_StaleMetricsStillAllowsICPU
 
 TEST_F(AdaptiveParameterManagerTest, DetermineHealth_CriticalCPULoad) {
     apm_->setStabilizedHealth(ScanRegistrationHealth::HEALTHY, LaserMappingHealth::HEALTHY);
-    apm_->setResourceMetrics(apm_->cpu_load_threshold_critical_ + 0.01f, 0.1f, 0.1f); // Critical CPU
+    apm_->setResourceMetrics(apm_->getCpuCriticalThreshold() + 0.01f, 0.1f, 0.1f); // Use getter
     EXPECT_EQ(apm_->getSystemHealth(), SystemHealth::HIGH_CPU_LOAD);
 }
 
 TEST_F(AdaptiveParameterManagerTest, DetermineHealth_HighLatency) {
     apm_->setStabilizedHealth(ScanRegistrationHealth::HEALTHY, LaserMappingHealth::HEALTHY);
-    apm_->setResourceMetrics(0.1f, 0.1f, apm_->pipeline_latency_threshold_high_sec_ + 0.1f);
+    apm_->setResourceMetrics(0.1f, 0.1f, apm_->getPipelineLatencyHighThresholdSec() + 0.1f); // Use getter
     EXPECT_EQ(apm_->getSystemHealth(), SystemHealth::PIPELINE_FALLING_BEHIND);
 }
 
@@ -149,7 +154,8 @@ TEST_F(AdaptiveParameterManagerTest, Process_Healthy_ProbesICPIterationsUp) {
 TEST_F(AdaptiveParameterManagerTest, Process_Healthy_ProbesFiltersDownAfterMaxICP) {
     apm_->setStabilizedHealth(ScanRegistrationHealth::HEALTHY, LaserMappingHealth::HEALTHY);
     apm_->setResourceMetrics(0.1f, 0.1f, 0.1f);
-    apm_->current_icp_iterations_ = apm_->getMaxICPIterations();
+    // apm_->current_icp_iterations_ = apm_->getMaxICPIterations(); // Direct access still needed if not using setter
+    apm_->setICPIterations(apm_->getMaxICPIterations()); // Use setter
     double initial_corner = apm_->getCornerFilter();
     double initial_surf = apm_->getSurfFilter();
 
@@ -165,7 +171,7 @@ TEST_F(AdaptiveParameterManagerTest, Process_Healthy_ProbesFiltersDownAfterMaxIC
 
 TEST_F(AdaptiveParameterManagerTest, Process_HighCPU_ReducesICPIterations) {
     apm_->setStabilizedHealth(ScanRegistrationHealth::HEALTHY, LaserMappingHealth::HEALTHY);
-    apm_->setResourceMetrics(apm_->cpu_load_threshold_high_ + 0.05f, 0.1f, 0.1f);
+    apm_->setResourceMetrics(apm_->getCpuHighThreshold() + 0.05f, 0.1f, 0.1f); // Use getter
     int initial_icp = apm_->getICPIterations();
     apm_->processHealthAndAdjustParameters();
     EXPECT_EQ(apm_->getSystemHealth(), SystemHealth::HIGH_CPU_LOAD);
@@ -175,8 +181,9 @@ TEST_F(AdaptiveParameterManagerTest, Process_HighCPU_ReducesICPIterations) {
 
 TEST_F(AdaptiveParameterManagerTest, Process_HighCPU_ThenFiltersIfICPatMin) {
     apm_->setStabilizedHealth(ScanRegistrationHealth::HEALTHY, LaserMappingHealth::HEALTHY);
-    apm_->setResourceMetrics(apm_->cpu_load_threshold_high_ + 0.05f, 0.1f, 0.1f);
-    apm_->current_icp_iterations_ = apm_->getMinICPIterations();
+    apm_->setResourceMetrics(apm_->getCpuHighThreshold() + 0.05f, 0.1f, 0.1f); // Use getter
+    // apm_->current_icp_iterations_ = apm_->getMinICPIterations(); // Direct access
+    apm_->setICPIterations(apm_->getMinICPIterations()); // Use setter
 
     double initial_corner = apm_->getCornerFilter();
     double initial_surf = apm_->getSurfFilter();
