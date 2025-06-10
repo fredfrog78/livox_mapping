@@ -62,12 +62,10 @@ public:
     int getDefaultICPIterations() { return default_icp_iterations_; }
     int getICPIterationAdjustmentStep() { return icp_iteration_adjustment_step_; }
 
-    // Making const values accessible for tests
-    // These are private static const in AdaptiveParameterManager
-    // Re-define them here for test usage or use hardcoded values if direct access isn't simple
-    static const int TEST_ICP_ISSUE_THRESHOLD_FOR_OVERLOAD_ = 3;
-    static const int TEST_HEALTHY_CYCLES_TO_RESET_COOLDOWN_ = 5;
-    static const int TEST_PROBING_AFTER_N_HEALTHY_CYCLES_ = 2;
+    // Making const values accessible for tests - No longer needed here, access directly from AdaptiveParameterManager public static members
+    // static const int TEST_ICP_ISSUE_THRESHOLD_FOR_OVERLOAD_ = 3;
+    // static const int TEST_HEALTHY_CYCLES_TO_RESET_COOLDOWN_ = 5;
+    // static const int TEST_PROBING_AFTER_N_HEALTHY_CYCLES_ = 2;
 
 };
 
@@ -139,7 +137,7 @@ TEST_F(AdaptiveParameterManagerTest, Process_Healthy_ProbesICPIterationsUp) {
     apm_->setStabilizedHealth(ScanRegistrationHealth::HEALTHY, LaserMappingHealth::HEALTHY);
     apm_->setResourceMetrics(0.1f, 0.1f, 0.1f);
     int initial_icp = apm_->getICPIterations();
-    for (int i = 0; i < TestableAdaptiveParameterManager::TEST_PROBING_AFTER_N_HEALTHY_CYCLES_; ++i) {
+    for (int i = 0; i < AdaptiveParameterManager::PROBING_AFTER_N_HEALTHY_CYCLES_; ++i) {
         apm_->processHealthAndAdjustParameters();
         ASSERT_EQ(apm_->getConsecutiveHealthyCycles(), i + 1);
     }
@@ -155,7 +153,7 @@ TEST_F(AdaptiveParameterManagerTest, Process_Healthy_ProbesFiltersDownAfterMaxIC
     double initial_corner = apm_->getCornerFilter();
     double initial_surf = apm_->getSurfFilter();
 
-    for (int i = 0; i < TestableAdaptiveParameterManager::TEST_PROBING_AFTER_N_HEALTHY_CYCLES_; ++i) {
+    for (int i = 0; i < AdaptiveParameterManager::PROBING_AFTER_N_HEALTHY_CYCLES_; ++i) {
         apm_->processHealthAndAdjustParameters();
     }
     apm_->processHealthAndAdjustParameters();
@@ -194,7 +192,7 @@ TEST_F(AdaptiveParameterManagerTest, Process_ICPUnstable_TriggersCooldown) {
     apm_->setStabilizedHealth(ScanRegistrationHealth::HEALTHY, LaserMappingHealth::ICP_DEGENERATE);
     apm_->setResourceMetrics(0.1f, 0.1f, 0.1f);
 
-    for (int i = 0; i < TestableAdaptiveParameterManager::TEST_ICP_ISSUE_THRESHOLD_FOR_OVERLOAD_ -1; ++i) {
+    for (int i = 0; i < AdaptiveParameterManager::ICP_ISSUE_THRESHOLD_FOR_OVERLOAD_ -1; ++i) {
         apm_->processHealthAndAdjustParameters();
         ASSERT_FALSE(apm_->isCooldownActive());
         ASSERT_EQ(apm_->getConsecutiveICPIssueWarnings(), i+1);
@@ -207,15 +205,15 @@ TEST_F(AdaptiveParameterManagerTest, Process_ICPUnstable_TriggersCooldown) {
 TEST_F(AdaptiveParameterManagerTest, Process_CooldownResetsAfterHealthyCycles) {
     apm_->setStabilizedHealth(ScanRegistrationHealth::HEALTHY, LaserMappingHealth::ICP_DEGENERATE);
     apm_->setResourceMetrics(0.1f, 0.1f, 0.1f);
-    for (int i = 0; i < TestableAdaptiveParameterManager::TEST_ICP_ISSUE_THRESHOLD_FOR_OVERLOAD_; ++i) {
+    for (int i = 0; i < AdaptiveParameterManager::ICP_ISSUE_THRESHOLD_FOR_OVERLOAD_; ++i) {
         apm_->processHealthAndAdjustParameters();
     }
     ASSERT_TRUE(apm_->isCooldownActive());
 
     apm_->setStabilizedHealth(ScanRegistrationHealth::HEALTHY, LaserMappingHealth::HEALTHY);
-    for (int i = 0; i < TestableAdaptiveParameterManager::TEST_HEALTHY_CYCLES_TO_RESET_COOLDOWN_; ++i) {
+    for (int i = 0; i < AdaptiveParameterManager::HEALTHY_CYCLES_TO_RESET_COOLDOWN_; ++i) {
         apm_->processHealthAndAdjustParameters();
-        if (i < TestableAdaptiveParameterManager::TEST_HEALTHY_CYCLES_TO_RESET_COOLDOWN_ - 1) { // Check before the last cycle
+        if (i < AdaptiveParameterManager::HEALTHY_CYCLES_TO_RESET_COOLDOWN_ - 1) { // Check before the last cycle
            ASSERT_TRUE(apm_->isCooldownActive());
         }
     }

@@ -63,19 +63,76 @@
 
 namespace loam_adaptive_parameter_manager {
 
-// Forward declaration of the test helper class
-class TestableAdaptiveParameterManager;
-
 class AdaptiveParameterManager : public rclcpp::Node {
 public:
-    friend class TestableAdaptiveParameterManager; // Corrected friend class
-
     AdaptiveParameterManager();
 
     void processHealthAndAdjustParameters();
 
     double getCurrentCornerFilterSize() const { return current_filter_parameter_corner_; }
     double getCurrentSurfFilterSize() const { return current_filter_parameter_surf_; }
+    int getCurrentICPIterations() const { return current_icp_iterations_; }
+
+
+    // Public constants
+    static const int HEALTH_REPORT_STABILITY_THRESHOLD_ = 2; // Min consecutive reports for a state to be "stabilized"
+    static const int ICP_ISSUE_THRESHOLD_FOR_OVERLOAD_ = 3;     // System states causing ICP warnings to trigger overload
+    static const int HEALTHY_CYCLES_TO_RESET_COOLDOWN_ = 5; // HEALTHY states to reset overload cooldown
+    static const int PROBING_AFTER_N_HEALTHY_CYCLES_ = 2;   // HEALTHY states before probing parameters
+
+protected:
+    // Internal state variables needed by TestableAdaptiveParameterManager
+    ScanRegistrationHealth stabilized_sr_health_;   // Health of ScanRegistration after meeting stability threshold
+    LaserMappingHealth stabilized_lm_health_;     // Health of LaserMapping after meeting stability threshold
+
+    float latest_cpu_load_;
+    float latest_memory_usage_;
+    float latest_pipeline_latency_sec_;
+    rclcpp::Time last_cpu_load_timestamp_;
+    rclcpp::Time last_memory_usage_timestamp_;
+    rclcpp::Time last_pipeline_latency_timestamp_;
+
+    SystemHealth current_system_health_;        // Overall system health, derived from stabilized component healths
+
+    double current_filter_parameter_corner_;
+    double current_filter_parameter_surf_;
+    int current_icp_iterations_;
+
+    bool overload_cooldown_active_;             // Flag indicating if overload cooldown is active
+    int consecutive_healthy_cycles_;          // Counts consecutive HEALTHY system states
+    int consecutive_icp_issue_warnings_;      // Counts consecutive LASER_MAPPING_ICP_UNSTABLE states
+
+    // Configuration for adaptable parameters: their defaults, min/max bounds
+    double default_filter_parameter_corner_;
+    double min_filter_parameter_corner_;
+    double max_filter_parameter_corner_;
+
+    double default_filter_parameter_surf_;
+    double min_filter_parameter_surf_;
+    double max_filter_parameter_surf_;
+
+    double adjustment_step_small_;              // For gentle probing or cautious adjustments
+    double adjustment_step_normal_;             // For standard reactions to issues
+
+    // Configuration for ICP iterations
+    int default_icp_iterations_;
+    int min_icp_iterations_;
+    int max_icp_iterations_;
+    int icp_iteration_adjustment_step_;
+
+    // Thresholds for resource monitoring (loaded from ROS parameters)
+    double cpu_load_threshold_high_;
+    double cpu_load_threshold_critical_;
+    double memory_usage_threshold_high_;
+    double memory_usage_threshold_critical_;
+    double pipeline_latency_threshold_high_sec_;
+    double pipeline_latency_threshold_critical_sec_;
+    double metric_stale_threshold_sec_;
+
+    // Helper methods needed by TestableAdaptiveParameterManager
+    void initializeParameters();                // Loads initial parameter values and configurations
+    void determineSystemHealth();               // Determines current_system_health_ from stabilized states
+    // applyParameterChanges(); // Not moving to protected as per self-correction in prompt
 
 private:
     // Subscription Callbacks to receive health status from other nodes
@@ -89,66 +146,14 @@ private:
     void updateScanRegistrationHealth(ScanRegistrationHealth sr_health);
     void updateLaserMappingHealth(LaserMappingHealth lm_health);
 
-    // Internal state variables
+    // Internal state variables not directly needed by current tests via protected access
     ScanRegistrationHealth latest_sr_health_;       // Raw health from ScanRegistration topic
     LaserMappingHealth latest_lm_health_;         // Raw health from LaserMapping topic
-    ScanRegistrationHealth stabilized_sr_health_;   // Health of ScanRegistration after meeting stability threshold
-    LaserMappingHealth stabilized_lm_health_;     // Health of LaserMapping after meeting stability threshold
-
     int sr_health_consecutive_count_;           // Counter for consecutive identical reports of latest_sr_health_
     int lm_health_consecutive_count_;           // Counter for consecutive identical reports of latest_lm_health_
-
-    static const int HEALTH_REPORT_STABILITY_THRESHOLD_ = 2; // Min consecutive reports for a state to be "stabilized"
-
-    SystemHealth current_system_health_;        // Overall system health, derived from stabilized component healths
     AdaptiveMode current_adaptive_mode_;        // Current adaptive behavior settings (e.g., enabled)
 
-    // Current values of adaptable parameters being managed
-    double current_filter_parameter_corner_;
-    double current_filter_parameter_surf_;
-
-    // Configuration for adaptable parameters: their defaults, min/max bounds
-    double default_filter_parameter_corner_;
-    double min_filter_parameter_corner_;
-    double max_filter_parameter_corner_;
-
-    double default_filter_parameter_surf_;
-    double min_filter_parameter_surf_;
-    double max_filter_parameter_surf_;
-
-    // Configuration for ICP iterations
-    int current_icp_iterations_;
-    int default_icp_iterations_;
-    int min_icp_iterations_;
-    int max_icp_iterations_;
-
-    // Step sizes for parameter adjustments
-    double adjustment_step_small_;              // For gentle probing or cautious adjustments
-    double adjustment_step_normal_;             // For standard reactions to issues
-
-    // Thresholds for resource monitoring (loaded from ROS parameters)
-    double cpu_load_threshold_high_;
-    double cpu_load_threshold_critical_;
-    double memory_usage_threshold_high_;
-    double memory_usage_threshold_critical_;
-    double pipeline_latency_threshold_high_sec_;
-    double pipeline_latency_threshold_critical_sec_;
-    double metric_stale_threshold_sec_;
-
-    // Step size for ICP iteration adjustments
-    int icp_iteration_adjustment_step_;
-
-    // State variables for overload detection and cooldown mechanism
-    int consecutive_icp_issue_warnings_;      // Counts consecutive LASER_MAPPING_ICP_UNSTABLE states
-    int consecutive_healthy_cycles_;          // Counts consecutive HEALTHY system states
-    static const int ICP_ISSUE_THRESHOLD_FOR_OVERLOAD_ = 3;     // System states causing ICP warnings to trigger overload
-    static const int HEALTHY_CYCLES_TO_RESET_COOLDOWN_ = 5; // HEALTHY states to reset overload cooldown
-    static const int PROBING_AFTER_N_HEALTHY_CYCLES_ = 2;   // HEALTHY states before probing parameters
-    bool overload_cooldown_active_;             // Flag indicating if overload cooldown is active
-
-    // Helper methods for core logic
-    void initializeParameters();                // Loads initial parameter values and configurations
-    void determineSystemHealth();               // Determines current_system_health_ from stabilized states
+    // Core logic not directly called by tests
     void applyParameterChanges();               // Applies changes to target node via parameter client
     bool isMetricFresh(const rclcpp::Time& metric_timestamp) const; // Checks if a metric is recent enough
 
@@ -158,14 +163,6 @@ private:
     rclcpp::TimerBase::SharedPtr processing_timer_;        // Timer to periodically call processHealthAndAdjustParameters
     std::shared_ptr<rclcpp::AsyncParametersClient> laser_mapping_param_client_; // Async client to set parameters on target
     std::string laser_mapping_node_name_;       // Name of the target node (e.g., "laser_mapping_node")
-
-    // Resource and Pipeline Metrics
-    float latest_cpu_load_;
-    float latest_memory_usage_;
-    float latest_pipeline_latency_sec_;
-    rclcpp::Time last_cpu_load_timestamp_;
-    rclcpp::Time last_memory_usage_timestamp_;
-    rclcpp::Time last_pipeline_latency_timestamp_;
 
     // Subscribers for resource and pipeline metrics
     rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr cpu_load_sub_;
