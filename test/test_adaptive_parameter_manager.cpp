@@ -122,13 +122,13 @@ TEST_F(AdaptiveParameterManagerTest, DetermineHealth_StaleMetricsStillAllowsICPU
 
 TEST_F(AdaptiveParameterManagerTest, DetermineHealth_CriticalCPULoad) {
     apm_->setStabilizedHealth(ScanRegistrationHealth::HEALTHY, LaserMappingHealth::HEALTHY);
-    apm_->setResourceMetrics(apm_->getCpuCriticalThreshold() + 0.01f, 0.1f, 0.1f); // Use getter
+    apm_->setResourceMetrics(apm_->getCpuCriticalThreshold() + 0.01f, 0.1f, 0.1f); // Critical CPU
     EXPECT_EQ(apm_->getSystemHealth(), SystemHealth::HIGH_CPU_LOAD);
 }
 
 TEST_F(AdaptiveParameterManagerTest, DetermineHealth_HighLatency) {
     apm_->setStabilizedHealth(ScanRegistrationHealth::HEALTHY, LaserMappingHealth::HEALTHY);
-    apm_->setResourceMetrics(0.1f, 0.1f, apm_->getPipelineLatencyHighThresholdSec() + 0.1f); // Use getter
+    apm_->setResourceMetrics(0.1f, 0.1f, apm_->getPipelineLatencyHighThresholdSec() + 0.1f);
     EXPECT_EQ(apm_->getSystemHealth(), SystemHealth::PIPELINE_FALLING_BEHIND);
 }
 
@@ -154,8 +154,7 @@ TEST_F(AdaptiveParameterManagerTest, Process_Healthy_ProbesICPIterationsUp) {
 TEST_F(AdaptiveParameterManagerTest, Process_Healthy_ProbesFiltersDownAfterMaxICP) {
     apm_->setStabilizedHealth(ScanRegistrationHealth::HEALTHY, LaserMappingHealth::HEALTHY);
     apm_->setResourceMetrics(0.1f, 0.1f, 0.1f);
-    // apm_->current_icp_iterations_ = apm_->getMaxICPIterations(); // Direct access still needed if not using setter
-    apm_->setICPIterations(apm_->getMaxICPIterations()); // Use setter
+    apm_->setICPIterations(apm_->getMaxICPIterations());
     double initial_corner = apm_->getCornerFilter();
     double initial_surf = apm_->getSurfFilter();
 
@@ -171,7 +170,7 @@ TEST_F(AdaptiveParameterManagerTest, Process_Healthy_ProbesFiltersDownAfterMaxIC
 
 TEST_F(AdaptiveParameterManagerTest, Process_HighCPU_ReducesICPIterations) {
     apm_->setStabilizedHealth(ScanRegistrationHealth::HEALTHY, LaserMappingHealth::HEALTHY);
-    apm_->setResourceMetrics(apm_->getCpuHighThreshold() + 0.05f, 0.1f, 0.1f); // Use getter
+    apm_->setResourceMetrics(apm_->getCpuHighThreshold() + 0.05f, 0.1f, 0.1f);
     int initial_icp = apm_->getICPIterations();
     apm_->processHealthAndAdjustParameters();
     EXPECT_EQ(apm_->getSystemHealth(), SystemHealth::HIGH_CPU_LOAD);
@@ -181,9 +180,8 @@ TEST_F(AdaptiveParameterManagerTest, Process_HighCPU_ReducesICPIterations) {
 
 TEST_F(AdaptiveParameterManagerTest, Process_HighCPU_ThenFiltersIfICPatMin) {
     apm_->setStabilizedHealth(ScanRegistrationHealth::HEALTHY, LaserMappingHealth::HEALTHY);
-    apm_->setResourceMetrics(apm_->getCpuHighThreshold() + 0.05f, 0.1f, 0.1f); // Use getter
-    // apm_->current_icp_iterations_ = apm_->getMinICPIterations(); // Direct access
-    apm_->setICPIterations(apm_->getMinICPIterations()); // Use setter
+    apm_->setResourceMetrics(apm_->getCpuHighThreshold() + 0.05f, 0.1f, 0.1f);
+    apm_->setICPIterations(apm_->getMinICPIterations());
 
     double initial_corner = apm_->getCornerFilter();
     double initial_surf = apm_->getSurfFilter();
