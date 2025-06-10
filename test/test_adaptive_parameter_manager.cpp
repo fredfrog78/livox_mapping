@@ -77,7 +77,7 @@ protected:
     // rclcpp::Node::SharedPtr test_node_; // APM is a Node, so it can provide its own clock, no need for separate test_node_
 
     void SetUp() override {
-        if (!rclcpp::is_initialized()) {
+        if (!rclcpp::ok()) { // Changed from is_initialized
             rclcpp::init(0, nullptr);
         }
 
@@ -88,7 +88,7 @@ protected:
     }
 
     void TearDown() override {
-        if (rclcpp::is_initialized()) {
+        if (rclcpp::ok()) { // Changed from is_initialized
             rclcpp::shutdown();
         }
     }

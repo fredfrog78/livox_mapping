@@ -65,6 +65,8 @@ namespace loam_adaptive_parameter_manager {
 
 class AdaptiveParameterManager : public rclcpp::Node {
 public:
+    friend class AdaptiveParameterManagerTest; // Allows GTest fixture to access private members
+
     AdaptiveParameterManager();
 
     void processHealthAndAdjustParameters();
