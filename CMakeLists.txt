@@ -155,16 +155,39 @@ if(OpenMP_FOUND)
   target_link_libraries(loam_laserMapping OpenMP::OpenMP_CXX)
 endif()
 
-add_executable(adaptive_parameter_manager_node src/adaptive_parameter_manager.cpp)
-ament_target_dependencies(adaptive_parameter_manager_node
-  rclcpp
-  std_msgs
-  # rcl_interfaces # Not directly needed for SyncParametersClient usage, but good for general awareness
+# Adaptive Parameter Manager Library
+add_library(adaptive_parameter_manager_lib
+  src/adaptive_parameter_manager.cpp
 )
+
+ament_target_dependencies(adaptive_parameter_manager_lib
+  "rclcpp"
+  "std_msgs"
+)
+
+target_include_directories(adaptive_parameter_manager_lib PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src> # For adaptive_parameter_manager.h
+  $<INSTALL_INTERFACE:include> # Assuming headers might be installed to include/
+)
+
+# Adaptive Parameter Manager Node Executable
+add_executable(adaptive_parameter_manager_node
+  src/adaptive_parameter_manager_node_main.cpp
+)
+
+ament_target_dependencies(adaptive_parameter_manager_node
+  "rclcpp" # For main function's rclcpp::init/spin/shutdown
+)
+
+target_link_libraries(adaptive_parameter_manager_node
+  adaptive_parameter_manager_lib
+  # rclcpp::rclcpp # Provided by ament_target_dependencies
+)
+
 # No direct PCL, OpenCV, or Eigen linking needed for adaptive_parameter_manager_node based on its current code.
 # If it were to process point clouds directly, these would be added.
 if(OpenMP_FOUND) # Though unlikely to be beneficial for this node's logic
-  target_link_libraries(adaptive_parameter_manager_node OpenMP::OpenMP_CXX)
+  target_link_libraries(adaptive_parameter_manager_node OpenMP::OpenMP_CXX) # This might be redundant if lib has it
 endif()
 
 # PointCloud Accumulator Node
@@ -191,6 +214,7 @@ install(TARGETS
   loam_scanRegistration_horizon
   loam_laserMapping
   adaptive_parameter_manager_node
+  adaptive_parameter_manager_lib # Added library
   pointcloud_accumulator_node # Added new node
   DESTINATION lib/${PROJECT_NAME}
 )
@@ -217,18 +241,23 @@ if(BUILD_TESTING)
   # Add GTest and specify all sources needed for the test executable
   ament_add_gtest(test_adaptive_parameter_manager
     test/test_adaptive_parameter_manager.cpp
-    src/adaptive_parameter_manager.cpp # Source of the class under test
+    # src/adaptive_parameter_manager.cpp # No longer needed, link the library instead
     # src/adaptive_parameter_manager_types.h # .h files are not typically listed here, handled by include_directories
   )
 
   # Link against necessary libraries for the test executable
+  # rclcpp and std_msgs dependencies for the test code itself.
+  # The functionality of AdaptiveParameterManager comes from the linked library.
   ament_target_dependencies(test_adaptive_parameter_manager
     rclcpp
     std_msgs
-    # Add any other dependencies that adaptive_parameter_manager.cpp needs
   )
 
-  # Ensure the test executable can find headers from src/
+  target_link_libraries(test_adaptive_parameter_manager
+    adaptive_parameter_manager_lib
+  )
+
+  # Ensure the test executable can find headers from src/ (where adaptive_parameter_manager.h is)
   target_include_directories(test_adaptive_parameter_manager
     PRIVATE
     src # To find adaptive_parameter_manager.h and types.h
