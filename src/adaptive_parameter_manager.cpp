@@ -493,7 +493,7 @@ void AdaptiveParameterManager::processHealthAndAdjustParameters() {
                             current_filter_parameter_surf_ = std::max(min_filter_parameter_surf_, current_filter_parameter_surf_ - adjustment_step_small_);
                         }
                     } else {
-                         RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 5000, "Max accuracy parameters already set (Max ICP iter: %d, Min filters: C=%.3f, S=%.3f).\", max_icp_iterations_, min_filter_parameter_corner_, min_filter_parameter_surf_);
+                         RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 5000, "Max accuracy parameters already set (Max ICP iter: %d, Min filters: C=%.3f, S=%.3f).", max_icp_iterations_, min_filter_parameter_corner_, min_filter_parameter_surf_);
                     }
                 } else {
                      RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 2000, "Action: Healthy, waiting for %d consecutive cycles before probing (currently %d). Holding parameters.",
