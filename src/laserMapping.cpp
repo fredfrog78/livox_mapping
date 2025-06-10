@@ -123,11 +123,19 @@ public:
     this->get_parameter("filter_parameter_surf", filter_param_surf_);
     RCLCPP_INFO(this->get_logger(), "Initial filter parameter surf: %f", filter_param_surf_);
 
+    this->declare_parameter<int>("icp_max_iterations", 10,
+        rcl_interfaces::msg::ParameterDescriptor()
+            .set__description("Maximum number of iterations for the ICP algorithm.")
+            .set__read_only(false)); // Mark as dynamically configurable
+
+    this->get_parameter("icp_max_iterations", icp_max_iterations_);
+    RCLCPP_INFO(this->get_logger(), "Initial ICP max iterations: %d", icp_max_iterations_);
 
     RCLCPP_INFO(this->get_logger(), "--- LaserMapping Node Parameters ---");
     RCLCPP_INFO(this->get_logger(), "map_file_path: %s", map_file_path_.c_str());
     RCLCPP_INFO(this->get_logger(), "filter_parameter_corner: %f", filter_param_corner_);
     RCLCPP_INFO(this->get_logger(), "filter_parameter_surf: %f", filter_param_surf_);
+    RCLCPP_INFO(this->get_logger(), "icp_max_iterations: %d", icp_max_iterations_);
 
     // Declare and get health monitoring parameters
     this->declare_parameter<bool>("health.enable_health_warnings", true);
@@ -312,6 +320,7 @@ private:
   std::string map_file_path_;
   double filter_param_corner_;
   double filter_param_surf_;
+  int icp_max_iterations_;
   bool markers_icp_corr_;
   bool markers_sel_features_;
   bool enable_icp_debug_logs_;
@@ -505,6 +514,14 @@ private:
                     RCLCPP_WARN(this->get_logger(), "Invalid type for parameter filter_parameter_surf. Expected double.");
                     result.successful = false;
                 }
+            } else if (param_name == "icp_max_iterations") {
+                if (param.get_type() == rclcpp::ParameterType::PARAMETER_INTEGER) {
+                    icp_max_iterations_ = param.as_int();
+                    RCLCPP_INFO(this->get_logger(), "Updated ICP max iterations to: %d", icp_max_iterations_);
+                } else {
+                    RCLCPP_WARN(this->get_logger(), "Invalid type for parameter icp_max_iterations. Expected integer.");
+                    result.successful = false;
+                }
             }
         }
         return result;
@@ -659,7 +676,7 @@ private:
       float deltaR_final = 0.0f; float deltaT_final = 0.0f; int actualIterCount = 0;
       last_icp_correspondences_ = 0; // Reset for this iteration
 
-      for (int iterCount = 0; iterCount < 5; iterCount++) { // Max 5 iterations in this version
+      for (int iterCount = 0; iterCount < icp_max_iterations_; iterCount++) {
         actualIterCount = iterCount + 1;
         laserCloudOri_->clear(); coeffSel_->clear();
         if (markers_icp_corr_) { /* ... clear marker points ... */ }
