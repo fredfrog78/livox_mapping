@@ -21,24 +21,38 @@ enum class LaserMappingHealth {
     LOW_ICP_CORRESPONDENCES,         // Warning: health.min_icp_correspondences
     HIGH_ICP_DELTA_ROTATION,         // Warning: health.max_icp_delta_rotation_deg
     HIGH_ICP_DELTA_TRANSLATION,      // Warning: health.max_icp_delta_translation_cm
-    ICP_DEGENERATE,                  // Warning: health.warn_on_icp_degeneracy
-    PIPELINE_STALLED,                // Placeholder: If pipeline processing rate drops
-    OVERLOADED_POST_ADJUSTMENT       // Internal state: If adjustments lead to sustained ICP issues
+    ICP_DEGENERATE                  // Warning: health.warn_on_icp_degeneracy
+    // PIPELINE_STALLED removed, covered by SystemHealth::PIPELINE_FALLING_BEHIND
+    // OVERLOADED_POST_ADJUSTMENT removed, covered by SystemHealth::LASER_MAPPING_OVERLOADED
 };
 
 // Overall system health summary
+// Ordered roughly from most critical/specific to least critical/general
 enum class SystemHealth {
-    UNKNOWN,
-    HEALTHY,
-    SCAN_REGISTRATION_ISSUES,
-    LASER_MAPPING_FEW_FEATURES_FOR_ICP,
-    LASER_MAPPING_ICP_UNSTABLE,
-    LASER_MAPPING_OVERLOADED // Added based on plan step 4
+    LASER_MAPPING_ICP_UNSTABLE,         // Critical mapping failure
+    LASER_MAPPING_OVERLOADED,           // System is struggling, parameters already pushed
+    PIPELINE_FALLING_BEHIND,            // Cannot keep up with real-time processing
+    HIGH_CPU_LOAD,                      // Resource constraint: CPU
+    LOW_MEMORY,                         // Resource constraint: Memory
+    LASER_MAPPING_FEW_FEATURES_FOR_ICP, // Insufficient data for mapping
+    SCAN_REGISTRATION_ISSUES,           // Upstream data processing issues
+    HEALTHY,                            // All nominal
+    UNKNOWN                             // Fallback or initial state
+};
+
+// Represents different operational strategies for the adaptive parameter manager
+enum class AdaptiveProfile {
+    PRIORITIZE_ACCURACY, // Default: Maximize ICP iterations, use smaller filter sizes, relax only when needed
+    BALANCED,            // Try to balance accuracy with resource usage
+    CONSERVE_RESOURCES   // Actively try to use fewer resources, potentially at cost of some accuracy
 };
 
 struct AdaptiveMode {
     bool enabled = true; // Master switch for adaptive behavior
-    // Could add profiles like 'CONSERVE_CPU', 'MAX_ACCURACY' in the future
+    AdaptiveProfile profile = AdaptiveProfile::PRIORITIZE_ACCURACY; // Default profile
+
+    // Could add specific thresholds here if they were to vary by profile,
+    // but for now, let's keep thresholds as separate ROS parameters.
 };
 
 } // namespace loam_adaptive_parameter_manager

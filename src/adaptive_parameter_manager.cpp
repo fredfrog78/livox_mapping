@@ -57,8 +57,33 @@
 #include "adaptive_parameter_manager.h"
 #include <algorithm> // For std::min/max
 #include <chrono>    // For timer duration and service timeout
+#include <stdexcept> // For std::runtime_error
+#include <cmath>     // For std::abs
 
 namespace loam_adaptive_parameter_manager {
+
+// const double CPU_LOAD_THRESHOLD_HIGH_ = 0.85; // Replaced by ROS parameter
+// const double CPU_LOAD_THRESHOLD_CRITICAL_ = 0.95; // Replaced by ROS parameter
+// const double MEMORY_USAGE_THRESHOLD_HIGH_ = 0.85; // Replaced by ROS parameter
+// const double MEMORY_USAGE_THRESHOLD_CRITICAL_ = 0.95; // Replaced by ROS parameter
+// const double PIPELINE_LATENCY_THRESHOLD_HIGH_SEC_ = 0.5; // Replaced by ROS parameter
+// const double PIPELINE_LATENCY_THRESHOLD_CRITICAL_SEC_ = 1.0; // Replaced by ROS parameter
+// const double METRIC_STALE_THRESHOLD_SEC_ = 5.0; // Replaced by ROS parameter
+
+const char* RCLCPP_SYSTEM_HEALTH_TO_STRING(SystemHealth health) {
+    switch (health) {
+        case SystemHealth::LASER_MAPPING_ICP_UNSTABLE: return "LASER_MAPPING_ICP_UNSTABLE";
+        case SystemHealth::LASER_MAPPING_OVERLOADED: return "LASER_MAPPING_OVERLOADED";
+        case SystemHealth::PIPELINE_FALLING_BEHIND: return "PIPELINE_FALLING_BEHIND";
+        case SystemHealth::HIGH_CPU_LOAD: return "HIGH_CPU_LOAD";
+        case SystemHealth::LOW_MEMORY: return "LOW_MEMORY";
+        case SystemHealth::LASER_MAPPING_FEW_FEATURES_FOR_ICP: return "LASER_MAPPING_FEW_FEATURES_FOR_ICP";
+        case SystemHealth::SCAN_REGISTRATION_ISSUES: return "SCAN_REGISTRATION_ISSUES";
+        case SystemHealth::HEALTHY: return "HEALTHY";
+        case SystemHealth::UNKNOWN: return "UNKNOWN";
+        default: return "UNDEFINED_HEALTH_STATE";
+    }
+}
 
 AdaptiveParameterManager::AdaptiveParameterManager() : Node("adaptive_parameter_manager_node"),
     latest_sr_health_(ScanRegistrationHealth::HEALTHY),
@@ -70,9 +95,19 @@ AdaptiveParameterManager::AdaptiveParameterManager() : Node("adaptive_parameter_
     current_system_health_(SystemHealth::UNKNOWN),
     consecutive_icp_issue_warnings_(0),
     consecutive_healthy_cycles_(0),
-    overload_cooldown_active_(false) {
+    overload_cooldown_active_(false),
+    latest_cpu_load_(0.0f),
+    latest_memory_usage_(0.0f),
+    latest_pipeline_latency_sec_(0.0f) {
 
     initializeParameters();
+
+    // Initialize timestamps for metrics. Using this->now() assumes metrics are fresh on first receipt.
+    // Alternatively, use rclcpp::Time(0,0, RCL_ROS_TIME) for a very old timestamp if explicit freshness check
+    // before first message is needed.
+    last_cpu_load_timestamp_ = this->now();
+    last_memory_usage_timestamp_ = this->now();
+    last_pipeline_latency_timestamp_ = this->now();
 
     auto default_qos = rclcpp::SystemDefaultsQoS();
     sr_health_sub_ = this->create_subscription<std_msgs::msg::Int32>(
@@ -88,6 +123,26 @@ AdaptiveParameterManager::AdaptiveParameterManager() : Node("adaptive_parameter_
     RCLCPP_INFO(this->get_logger(), "AdaptiveParameterManager node initialized.");
     if(sr_health_sub_) RCLCPP_INFO(this->get_logger(), "Subscribed to %s", sr_health_sub_->get_topic_name());
     if(lm_health_sub_) RCLCPP_INFO(this->get_logger(), "Subscribed to %s", lm_health_sub_->get_topic_name());
+
+    cpu_load_sub_ = this->create_subscription<std_msgs::msg::Float32>(
+        "/system_monitor/cpu_load",
+        default_qos,
+        std::bind(&AdaptiveParameterManager::cpuLoadCallback, this, std::placeholders::_1));
+
+    memory_usage_sub_ = this->create_subscription<std_msgs::msg::Float32>(
+        "/system_monitor/memory_usage",
+        default_qos,
+        std::bind(&AdaptiveParameterManager::memoryUsageCallback, this, std::placeholders::_1));
+
+    pipeline_latency_sub_ = this->create_subscription<std_msgs::msg::Float32>(
+        "/laser_mapping/pipeline_latency_sec",
+        default_qos,
+        std::bind(&AdaptiveParameterManager::pipelineLatencyCallback, this, std::placeholders::_1));
+
+    if(cpu_load_sub_) RCLCPP_INFO(this->get_logger(), "Subscribed to %s", cpu_load_sub_->get_topic_name());
+    if(memory_usage_sub_) RCLCPP_INFO(this->get_logger(), "Subscribed to %s", memory_usage_sub_->get_topic_name());
+    if(pipeline_latency_sub_) RCLCPP_INFO(this->get_logger(), "Subscribed to %s", pipeline_latency_sub_->get_topic_name());
+
     RCLCPP_INFO(this->get_logger(), "Initial Corner Filter: %.3f, Surf Filter: %.3f", current_filter_parameter_corner_, current_filter_parameter_surf_);
 
     laser_mapping_param_client_ = std::make_shared<rclcpp::AsyncParametersClient>(this, laser_mapping_node_name_);
@@ -98,6 +153,23 @@ AdaptiveParameterManager::AdaptiveParameterManager() : Node("adaptive_parameter_
         1s,
         std::bind(&AdaptiveParameterManager::processHealthAndAdjustParameters, this));
     RCLCPP_INFO(this->get_logger(), "Processing timer started (1s period). Will adjust parameters for: %s", laser_mapping_node_name_.c_str());
+}
+
+bool AdaptiveParameterManager::isMetricFresh(const rclcpp::Time& metric_timestamp) const {
+    if (metric_timestamp.seconds() == 0 && metric_timestamp.nanoseconds() == 0) {
+        RCLCPP_DEBUG_ONCE(this->get_logger(), "Metric timestamp is zero, assuming stale.");
+        return false;
+    }
+    try {
+        if (this->get_clock()->now().seconds() == 0 && this->get_clock()->now().nanoseconds() == 0) {
+            RCLCPP_WARN_ONCE(this->get_logger(), "Clock not yet valid (returns zero time), cannot check metric freshness accurately. Assuming stale.");
+            return false;
+        }
+        return (this->get_clock()->now() - metric_timestamp).seconds() < metric_stale_threshold_sec_;
+    } catch (const std::runtime_error& e) {
+        RCLCPP_ERROR_ONCE(this->get_logger(), "Error calculating time difference for metric freshness: %s. Assuming stale.", e.what());
+        return false;
+    }
 }
 
 void AdaptiveParameterManager::scanRegistrationHealthCallback(const std_msgs::msg::Int32::SharedPtr msg) {
@@ -131,6 +203,45 @@ void AdaptiveParameterManager::initializeParameters() {
     adjustment_step_small_ = 0.005;
     adjustment_step_normal_ = 0.02;
     current_adaptive_mode_.enabled = true; // Enable adaptive behavior by default
+
+    // Initialize ICP iteration parameters
+    this->declare_parameter<int>("icp_iterations.default", 10);
+    this->get_parameter("icp_iterations.default", default_icp_iterations_);
+    this->declare_parameter<int>("icp_iterations.min", 5);
+    this->get_parameter("icp_iterations.min", min_icp_iterations_);
+    this->declare_parameter<int>("icp_iterations.max", 20);
+    this->get_parameter("icp_iterations.max", max_icp_iterations_);
+    current_icp_iterations_ = default_icp_iterations_;
+
+    this->declare_parameter<int>("icp_iterations.adjustment_step", 1);
+    this->get_parameter("icp_iterations.adjustment_step", icp_iteration_adjustment_step_);
+
+    // Thresholds for resource monitoring
+    this->declare_parameter<double>("thresholds.cpu_load.high", 0.85);
+    this->get_parameter("thresholds.cpu_load.high", cpu_load_threshold_high_);
+    this->declare_parameter<double>("thresholds.cpu_load.critical", 0.95);
+    this->get_parameter("thresholds.cpu_load.critical", cpu_load_threshold_critical_);
+
+    this->declare_parameter<double>("thresholds.memory_usage.high", 0.85);
+    this->get_parameter("thresholds.memory_usage.high", memory_usage_threshold_high_);
+    this->declare_parameter<double>("thresholds.memory_usage.critical", 0.95);
+    this->get_parameter("thresholds.memory_usage.critical", memory_usage_threshold_critical_);
+
+    this->declare_parameter<double>("thresholds.pipeline_latency.high_sec", 0.5);
+    this->get_parameter("thresholds.pipeline_latency.high_sec", pipeline_latency_threshold_high_sec_);
+    this->declare_parameter<double>("thresholds.pipeline_latency.critical_sec", 1.0);
+    this->get_parameter("thresholds.pipeline_latency.critical_sec", pipeline_latency_threshold_critical_sec_);
+
+    this->declare_parameter<double>("thresholds.metric_stale_sec", 5.0);
+    this->get_parameter("thresholds.metric_stale_sec", metric_stale_threshold_sec_);
+
+    // Log initial settings
+    RCLCPP_INFO(this->get_logger(), "ICP Iterations: Initial %d (Min: %d, Max: %d, Step: %d)",
+                current_icp_iterations_, min_icp_iterations_, max_icp_iterations_, icp_iteration_adjustment_step_);
+    RCLCPP_INFO(this->get_logger(), "CPU Thresholds: High %.2f, Critical %.2f", cpu_load_threshold_high_, cpu_load_threshold_critical_);
+    RCLCPP_INFO(this->get_logger(), "Mem Thresholds: High %.2f, Critical %.2f", memory_usage_threshold_high_, memory_usage_threshold_critical_);
+    RCLCPP_INFO(this->get_logger(), "Latency Thresholds: High %.2fs, Critical %.2fs", pipeline_latency_threshold_high_sec_, pipeline_latency_threshold_critical_sec_);
+    RCLCPP_INFO(this->get_logger(), "Metric Stale Threshold: %.2fs", metric_stale_threshold_sec_);
 }
 
 void AdaptiveParameterManager::updateScanRegistrationHealth(ScanRegistrationHealth sr_health) {
@@ -174,17 +285,67 @@ void AdaptiveParameterManager::updateLaserMappingHealth(LaserMappingHealth lm_he
 }
 
 void AdaptiveParameterManager::determineSystemHealth() {
-    // Consolidate stabilized component health into an overall system health diagnosis
-    // Priority of issues: ICP Unstable > Few Features for ICP > Scan Registration Issues > Healthy > Unknown
+    // Priority: ICP Unstable > Latency (Critical) > CPU (Critical) > Memory (Critical) >
+    //           Latency (High) > CPU (High) > Memory (High) > Few Features > SR Issues > Healthy > Unknown
 
-    // Check for critical LaserMapping ICP issues
+    // 1. Check for critical LaserMapping ICP issues
     if (stabilized_lm_health_ == LaserMappingHealth::HIGH_ICP_DELTA_ROTATION ||
         stabilized_lm_health_ == LaserMappingHealth::HIGH_ICP_DELTA_TRANSLATION ||
         stabilized_lm_health_ == LaserMappingHealth::ICP_DEGENERATE) {
         current_system_health_ = SystemHealth::LASER_MAPPING_ICP_UNSTABLE;
         return;
     }
-    // Check for issues related to insufficient features for LaserMapping ICP
+
+    // 2. Check Critical Pipeline Latency
+    if (isMetricFresh(last_pipeline_latency_timestamp_) && latest_pipeline_latency_sec_ > pipeline_latency_threshold_critical_sec_) {
+        current_system_health_ = SystemHealth::PIPELINE_FALLING_BEHIND;
+        return;
+    }
+
+    // 3. Check Critical CPU Load
+    if (isMetricFresh(last_cpu_load_timestamp_) && latest_cpu_load_ > cpu_load_threshold_critical_) {
+        current_system_health_ = SystemHealth::HIGH_CPU_LOAD;
+        return;
+    }
+
+    // 4. Check Critical Memory Usage
+    if (isMetricFresh(last_memory_usage_timestamp_) && latest_memory_usage_ > memory_usage_threshold_critical_) {
+        current_system_health_ = SystemHealth::LOW_MEMORY;
+        return;
+    }
+
+    // 5. Check High Pipeline Latency (Non-Critical)
+    if (isMetricFresh(last_pipeline_latency_timestamp_) && latest_pipeline_latency_sec_ > pipeline_latency_threshold_high_sec_) {
+        current_system_health_ = SystemHealth::PIPELINE_FALLING_BEHIND;
+        return;
+    }
+
+    // 6. Check High CPU Load (Non-Critical)
+    if (isMetricFresh(last_cpu_load_timestamp_) && latest_cpu_load_ > cpu_load_threshold_high_) {
+        current_system_health_ = SystemHealth::HIGH_CPU_LOAD;
+        return;
+    }
+
+    // 7. Check High Memory Usage (Non-Critical)
+    if (isMetricFresh(last_memory_usage_timestamp_) && latest_memory_usage_ > memory_usage_threshold_high_) {
+        current_system_health_ = SystemHealth::LOW_MEMORY;
+        return;
+    }
+
+    // Stale Metrics Logging - Placed here so critical issues above are caught first.
+    // These throttled warnings will appear if metrics are stale but no critical issue was found.
+    if (!isMetricFresh(last_pipeline_latency_timestamp_)) {
+        RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 10000, "Pipeline latency metric is stale (last update: %.2fs ago). System health assessment might be based on old data.", (this->get_clock()->now() - last_pipeline_latency_timestamp_).seconds());
+    }
+    if (!isMetricFresh(last_cpu_load_timestamp_)) {
+        RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 10000, "CPU load metric is stale (last update: %.2fs ago). System health assessment might be based on old data.", (this->get_clock()->now() - last_cpu_load_timestamp_).seconds());
+    }
+    if (!isMetricFresh(last_memory_usage_timestamp_)) {
+        RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 10000, "Memory usage metric is stale (last update: %.2fs ago). System health assessment might be based on old data.", (this->get_clock()->now() - last_memory_usage_timestamp_).seconds());
+    }
+
+    // 8. Check for issues related to insufficient features for LaserMapping ICP
+    // (These are checked after resource issues, as resource constraints might cause these)
     if (stabilized_lm_health_ == LaserMappingHealth::LOW_DOWNSAMPLED_CORNER_FEATURES ||
         stabilized_lm_health_ == LaserMappingHealth::LOW_DOWNSAMPLED_SURF_FEATURES ||
         stabilized_lm_health_ == LaserMappingHealth::LOW_MAP_CORNER_POINTS_ICP ||
@@ -193,20 +354,32 @@ void AdaptiveParameterManager::determineSystemHealth() {
         current_system_health_ = SystemHealth::LASER_MAPPING_FEW_FEATURES_FOR_ICP;
         return;
     }
-    // Check for ScanRegistration issues if LaserMapping seems okay regarding features for ICP
+
+    // 9. Check for ScanRegistration issues
     if (stabilized_sr_health_ == ScanRegistrationHealth::LOW_RAW_POINTS ||
         stabilized_sr_health_ == ScanRegistrationHealth::LOW_SHARP_FEATURES ||
         stabilized_sr_health_ == ScanRegistrationHealth::LOW_FLAT_FEATURES) {
         current_system_health_ = SystemHealth::SCAN_REGISTRATION_ISSUES;
         return;
     }
-    // If all components report healthy
-    if (stabilized_lm_health_ == LaserMappingHealth::HEALTHY && stabilized_sr_health_ == ScanRegistrationHealth::HEALTHY) {
+
+    // 10. If all checks pass, system is Healthy
+    // This check must also ensure that metrics are not stale or are within acceptable non-critical ranges
+    // to truly be 'HEALTHY'. If metrics are stale, we might not be truly healthy.
+    // For this iteration, if metrics are stale, we won't declare HEALTHY, falling through to UNKNOWN.
+    bool all_metrics_fresh_or_not_checked =
+        (isMetricFresh(last_pipeline_latency_timestamp_) || latest_pipeline_latency_sec_ == 0.0f) && // Consider 0.0f as not yet reported / not an issue
+        (isMetricFresh(last_cpu_load_timestamp_) || latest_cpu_load_ == 0.0f) &&
+        (isMetricFresh(last_memory_usage_timestamp_) || latest_memory_usage_ == 0.0f);
+
+    if (stabilized_lm_health_ == LaserMappingHealth::HEALTHY &&
+        stabilized_sr_health_ == ScanRegistrationHealth::HEALTHY &&
+        all_metrics_fresh_or_not_checked) { // Only healthy if component healths are good AND metrics are fresh (or not yet an issue)
         current_system_health_ = SystemHealth::HEALTHY;
         return;
     }
-    // Default to UNKNOWN if no specific condition is met (e.g., one component UNKNOWN, other HEALTHY)
-    current_system_health_ = SystemHealth::UNKNOWN;
+
+    current_system_health_ = SystemHealth::UNKNOWN; // Default if no other state is determined
 }
 
 void AdaptiveParameterManager::processHealthAndAdjustParameters() {
@@ -215,12 +388,19 @@ void AdaptiveParameterManager::processHealthAndAdjustParameters() {
         return;
     }
 
-    determineSystemHealth(); // Update current_system_health_ based on stabilized component health
+    SystemHealth health_before_update = current_system_health_;
+    determineSystemHealth();
+    if(current_system_health_ != health_before_update) {
+        RCLCPP_INFO(this->get_logger(), "System health determined: %s (was %s)",
+                    RCLCPP_SYSTEM_HEALTH_TO_STRING(current_system_health_),
+                    RCLCPP_SYSTEM_HEALTH_TO_STRING(health_before_update));
+    }
 
     double prev_corner_filter = current_filter_parameter_corner_;
     double prev_surf_filter = current_filter_parameter_surf_;
+    int prev_icp_iterations = current_icp_iterations_;
 
-    // Overload detection and healthy cycle counting logic
+    // Overload Management
     if (current_system_health_ == SystemHealth::LASER_MAPPING_ICP_UNSTABLE) {
         consecutive_icp_issue_warnings_++;
         consecutive_healthy_cycles_ = 0;
@@ -228,89 +408,129 @@ void AdaptiveParameterManager::processHealthAndAdjustParameters() {
             RCLCPP_WARN(this->get_logger(), "Overload detected! Consecutive ICP issues (%d) reached threshold (%d). Activating cooldown.",
                         consecutive_icp_issue_warnings_, ICP_ISSUE_THRESHOLD_FOR_OVERLOAD_);
             overload_cooldown_active_ = true;
-            // Force a more conservative stance during overload
-            current_filter_parameter_corner_ = std::min(max_filter_parameter_corner_, current_filter_parameter_corner_ + adjustment_step_normal_ * 2.0);
-            current_filter_parameter_surf_ = std::min(max_filter_parameter_surf_, current_filter_parameter_surf_ + adjustment_step_normal_ * 2.0);
+            current_icp_iterations_ = std::max(min_icp_iterations_, default_icp_iterations_ - 2); // Keep fixed reduction for now
+            current_filter_parameter_corner_ = std::min(max_filter_parameter_corner_, default_filter_parameter_corner_ + adjustment_step_normal_ * 2.0);
+            current_filter_parameter_surf_ = std::min(max_filter_parameter_surf_, default_filter_parameter_surf_ + adjustment_step_normal_ * 2.0);
         }
     } else if (current_system_health_ == SystemHealth::HEALTHY) {
-        consecutive_icp_issue_warnings_ = 0;
+        if (consecutive_icp_issue_warnings_ > 0) {
+            RCLCPP_INFO(this->get_logger(), "ICP issues seems resolved (current state: HEALTHY), resetting warning count from %d to 0.", consecutive_icp_issue_warnings_);
+            consecutive_icp_issue_warnings_ = 0;
+        }
         consecutive_healthy_cycles_++;
         if (overload_cooldown_active_ && consecutive_healthy_cycles_ >= HEALTHY_CYCLES_TO_RESET_COOLDOWN_) {
-            RCLCPP_INFO(this->get_logger(), "System stable for %d cycles. Resetting overload cooldown.", consecutive_healthy_cycles_);
+            RCLCPP_INFO(this->get_logger(), "System stable for %d cycles. Resetting overload cooldown. Parameters will return to default/probing.", consecutive_healthy_cycles_);
             overload_cooldown_active_ = false;
-            consecutive_healthy_cycles_ = 0; // Reset for fresh count towards probing after cooldown
+            consecutive_healthy_cycles_ = 0;
+            current_icp_iterations_ = default_icp_iterations_;
+            current_filter_parameter_corner_ = default_filter_parameter_corner_;
+            current_filter_parameter_surf_ = default_filter_parameter_surf_;
         }
-    } else { // For any other non-healthy, non-ICP-unstable state
+    } else {
         consecutive_healthy_cycles_ = 0;
-        if (current_system_health_ != SystemHealth::LASER_MAPPING_FEW_FEATURES_FOR_ICP) {
-           consecutive_icp_issue_warnings_ = 0; // Reset ICP warnings if the issue is not related to few features that might lead to ICP problems
+        // Reset ICP warning count if the issue is NOT ICP_UNSTABLE, FEW_FEATURES (which can lead to ICP unstable), or a resource issue (which can also lead to ICP unstable)
+        // This prevents warnings from clearing if the system is oscillating between, e.g. HIGH_CPU and ICP_UNSTABLE
+        if (current_system_health_ != SystemHealth::LASER_MAPPING_ICP_UNSTABLE &&
+            current_system_health_ != SystemHealth::LASER_MAPPING_FEW_FEATURES_FOR_ICP &&
+            current_system_health_ != SystemHealth::PIPELINE_FALLING_BEHIND &&
+            current_system_health_ != SystemHealth::HIGH_CPU_LOAD &&
+            current_system_health_ != SystemHealth::LOW_MEMORY) {
+           if(consecutive_icp_issue_warnings_ > 0) {
+             RCLCPP_INFO(this->get_logger(), "System issue is %s (not directly ICP related), resetting ICP warning count from %d.", RCLCPP_SYSTEM_HEALTH_TO_STRING(current_system_health_), consecutive_icp_issue_warnings_);
+             consecutive_icp_issue_warnings_ = 0;
+           }
         }
     }
 
-    // Parameter adjustment logic based on current_system_health_
-    switch (current_system_health_) {
-        case SystemHealth::LASER_MAPPING_FEW_FEATURES_FOR_ICP:
-            RCLCPP_INFO(this->get_logger(), "State: LASER_MAPPING_FEW_FEATURES_FOR_ICP. Action: Decrease filter sizes.");
-            if (!overload_cooldown_active_) {
+    if (overload_cooldown_active_) {
+        RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 2000, "Overload cooldown active. Action: Maintaining conservative parameters (ICP: %d, Corner: %.3f, Surf: %.3f).",
+            current_icp_iterations_, current_filter_parameter_corner_, current_filter_parameter_surf_);
+    } else {
+        switch (current_system_health_) {
+            case SystemHealth::LASER_MAPPING_ICP_UNSTABLE:
+                RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "State: LASER_MAPPING_ICP_UNSTABLE (not in cooldown). Action: Decrease ICP iter, Increase filter sizes.");
+                current_icp_iterations_ = std::max(min_icp_iterations_, current_icp_iterations_ - icp_iteration_adjustment_step_);
+                current_filter_parameter_corner_ = std::min(max_filter_parameter_corner_, current_filter_parameter_corner_ + adjustment_step_normal_);
+                current_filter_parameter_surf_ = std::min(max_filter_parameter_surf_, current_filter_parameter_surf_ + adjustment_step_normal_);
+                break;
+
+            case SystemHealth::PIPELINE_FALLING_BEHIND:
+            case SystemHealth::HIGH_CPU_LOAD:
+            case SystemHealth::LOW_MEMORY:
+                RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "State: Resource Constraint (%s). Action: Decrease ICP iter primarily, then increase filters if needed.", RCLCPP_SYSTEM_HEALTH_TO_STRING(current_system_health_));
+                if (current_icp_iterations_ > min_icp_iterations_) {
+                    current_icp_iterations_ = std::max(min_icp_iterations_, current_icp_iterations_ - icp_iteration_adjustment_step_);
+                } else if (current_filter_parameter_surf_ < max_filter_parameter_surf_ || current_filter_parameter_corner_ < max_filter_parameter_corner_) {
+                    current_filter_parameter_corner_ = std::min(max_filter_parameter_corner_, current_filter_parameter_corner_ + adjustment_step_normal_);
+                    current_filter_parameter_surf_ = std::min(max_filter_parameter_surf_, current_filter_parameter_surf_ + adjustment_step_normal_);
+                } else {
+                    RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000, "Resource constraint (%s) persists, ICP at min (%d), filters at max (C:%.3f, S:%.3f). No further relaxation possible.",
+                                         RCLCPP_SYSTEM_HEALTH_TO_STRING(current_system_health_), min_icp_iterations_, max_filter_parameter_corner_, max_filter_parameter_surf_);
+                }
+                break;
+
+            case SystemHealth::LASER_MAPPING_FEW_FEATURES_FOR_ICP:
+                RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "State: LASER_MAPPING_FEW_FEATURES_FOR_ICP. Action: Decrease filter sizes.");
                 current_filter_parameter_corner_ = std::max(min_filter_parameter_corner_, current_filter_parameter_corner_ - adjustment_step_normal_);
                 current_filter_parameter_surf_ = std::max(min_filter_parameter_surf_, current_filter_parameter_surf_ - adjustment_step_normal_);
-            } else { RCLCPP_INFO(this->get_logger(), "Overload cooldown active, no reduction for FEW_FEATURES_ICP."); }
-            break;
-        case SystemHealth::LASER_MAPPING_ICP_UNSTABLE:
-            RCLCPP_INFO(this->get_logger(), "State: LASER_MAPPING_ICP_UNSTABLE. (Consecutive warnings: %d)", consecutive_icp_issue_warnings_);
-            if (overload_cooldown_active_) {
-                RCLCPP_INFO(this->get_logger(), "Action: Overload cooldown active. Maintain or slightly increase filters.");
-                current_filter_parameter_corner_ = std::min(max_filter_parameter_corner_, current_filter_parameter_corner_ + adjustment_step_small_);
-                current_filter_parameter_surf_ = std::min(max_filter_parameter_surf_, current_filter_parameter_surf_ + adjustment_step_small_);
-            } else {
-                if (stabilized_sr_health_ != ScanRegistrationHealth::HEALTHY) {
-                    RCLCPP_INFO(this->get_logger(), "Action: SR unhealthy. Cautiously decrease filters.");
-                    current_filter_parameter_corner_ = std::max(min_filter_parameter_corner_, current_filter_parameter_corner_ - adjustment_step_small_);
-                    current_filter_parameter_surf_ = std::max(min_filter_parameter_surf_, current_filter_parameter_surf_ - adjustment_step_small_);
+                break;
+
+            case SystemHealth::SCAN_REGISTRATION_ISSUES:
+                RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "State: SCAN_REGISTRATION_ISSUES. Action: Maintain current params. Issue is upstream.");
+                break;
+
+            case SystemHealth::HEALTHY:
+                RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 2000,"State: HEALTHY. (Consecutive healthy cycles: %d)", consecutive_healthy_cycles_);
+                if (consecutive_healthy_cycles_ >= PROBING_AFTER_N_HEALTHY_CYCLES_) {
+                    RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 2000, "Action: Probing for better accuracy/efficiency (Cur ICP: %d, Cur Corner: %.3f, Cur Surf: %.3f).", current_icp_iterations_, current_filter_parameter_corner_, current_filter_parameter_surf_);
+                    if (current_icp_iterations_ < max_icp_iterations_) {
+                        current_icp_iterations_ = std::min(max_icp_iterations_, current_icp_iterations_ + icp_iteration_adjustment_step_);
+                    } else if (current_filter_parameter_corner_ > min_filter_parameter_corner_ || current_filter_parameter_surf_ > min_filter_parameter_surf_) {
+                        if (current_filter_parameter_corner_ > min_filter_parameter_corner_) {
+                             current_filter_parameter_corner_ = std::max(min_filter_parameter_corner_, current_filter_parameter_corner_ - adjustment_step_small_);
+                        }
+                        if (current_filter_parameter_surf_ > min_filter_parameter_surf_) {
+                            current_filter_parameter_surf_ = std::max(min_filter_parameter_surf_, current_filter_parameter_surf_ - adjustment_step_small_);
+                        }
+                    } else {
+                         RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 5000, "Max accuracy parameters already set (Max ICP iter: %d, Min filters: C=%.3f, S=%.3f).\", max_icp_iterations_, min_filter_parameter_corner_, min_filter_parameter_surf_);
+                    }
                 } else {
-                    RCLCPP_INFO(this->get_logger(), "Action: SR healthy. Increase filters to stabilize ICP.");
-                    current_filter_parameter_corner_ = std::min(max_filter_parameter_corner_, current_filter_parameter_corner_ + adjustment_step_small_);
-                    current_filter_parameter_surf_ = std::min(max_filter_parameter_surf_, current_filter_parameter_surf_ + adjustment_step_small_);
+                     RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 2000, "Action: Healthy, waiting for %d consecutive cycles before probing (currently %d). Holding parameters.",
+                                PROBING_AFTER_N_HEALTHY_CYCLES_, consecutive_healthy_cycles_);
                 }
-            }
-            break;
-        case SystemHealth::SCAN_REGISTRATION_ISSUES:
-            RCLCPP_INFO(this->get_logger(), "State: SCAN_REGISTRATION_ISSUES. Action: Maintain LM filters.");
-            // No changes to LM filter sizes; SR issues are upstream.
-            break;
-        case SystemHealth::HEALTHY:
-            RCLCPP_INFO(this->get_logger(), "State: HEALTHY. (Consecutive healthy cycles: %d, Cooldown: %s)",
-                        consecutive_healthy_cycles_, overload_cooldown_active_ ? "active" : "inactive");
-            if (!overload_cooldown_active_ && consecutive_healthy_cycles_ >= PROBING_AFTER_N_HEALTHY_CYCLES_) {
-                RCLCPP_INFO(this->get_logger(), "Action: Probing for resource savings (healthy for %d cycles). Increase filter sizes.", consecutive_healthy_cycles_);
-                current_filter_parameter_corner_ = std::min(max_filter_parameter_corner_, current_filter_parameter_corner_ + adjustment_step_small_);
-                current_filter_parameter_surf_ = std::min(max_filter_parameter_surf_, current_filter_parameter_surf_ + adjustment_step_small_);
-            } else if (overload_cooldown_active_) {
-                RCLCPP_INFO(this->get_logger(), "Action: Healthy, but overload cooldown active. Holding parameters.");
-            } else {
-                RCLCPP_INFO(this->get_logger(), "Action: Healthy, but waiting for %d consecutive cycles before probing (currently %d). Holding parameters.",
-                            PROBING_AFTER_N_HEALTHY_CYCLES_, consecutive_healthy_cycles_);
-            }
-            break;
-        case SystemHealth::UNKNOWN:
-        default:
-            RCLCPP_INFO(this->get_logger(), "State: UNKNOWN. Action: No parameter adjustments.");
-            break;
+                break;
+
+            case SystemHealth::LASER_MAPPING_OVERLOADED:
+                 RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "State: LASER_MAPPING_OVERLOADED (external). Action: Enforce conservative params.");
+                current_icp_iterations_ = std::max(min_icp_iterations_, default_icp_iterations_ - 2 ); // Keep fixed reduction for now
+                current_filter_parameter_corner_ = std::min(max_filter_parameter_corner_, default_filter_parameter_corner_ + adjustment_step_normal_);
+                current_filter_parameter_surf_ = std::min(max_filter_parameter_surf_, default_filter_parameter_surf_ + adjustment_step_normal_);
+                break;
+
+            case SystemHealth::UNKNOWN:
+            default:
+                RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 2000, "State: UNKNOWN or Unhandled (%s). Action: No parameter adjustments.", RCLCPP_SYSTEM_HEALTH_TO_STRING(current_system_health_));
+                break;
+        }
     }
 
     // Ensure parameters are always within their defined min/max bounds after any adjustment
     current_filter_parameter_corner_ = std::max(min_filter_parameter_corner_, std::min(max_filter_parameter_corner_, current_filter_parameter_corner_));
     current_filter_parameter_surf_ = std::max(min_filter_parameter_surf_, std::min(max_filter_parameter_surf_, current_filter_parameter_surf_));
+    current_icp_iterations_ = std::max(min_icp_iterations_, std::min(max_icp_iterations_, current_icp_iterations_));
 
-    // If parameters changed, apply them to the target node
-    if (std::abs(current_filter_parameter_corner_ - prev_corner_filter) > 1e-5 ||
-        std::abs(current_filter_parameter_surf_ - prev_surf_filter) > 1e-5) {
-        RCLCPP_INFO(this->get_logger(), "Parameter values changed. New Corner: %.3f (was %.3f), New Surf: %.3f (was %.3f). Applying to %s.",
+    if (std::abs(current_filter_parameter_corner_ - prev_corner_filter) > 1e-6 ||
+        std::abs(current_filter_parameter_surf_ - prev_surf_filter) > 1e-6 ||
+        current_icp_iterations_ != prev_icp_iterations) {
+        RCLCPP_INFO(this->get_logger(), "Parameter values changed. New Corner: %.3f (was %.3f), New Surf: %.3f (was %.3f), New ICP Iter: %d (was %d). Applying to %s.",
                     current_filter_parameter_corner_, prev_corner_filter, current_filter_parameter_surf_, prev_surf_filter,
+                    current_icp_iterations_, prev_icp_iterations,
                     laser_mapping_node_name_.c_str());
         applyParameterChanges();
     } else {
-        RCLCPP_DEBUG(this->get_logger(), "No parameter changes to apply this cycle.");
+        RCLCPP_DEBUG_THROTTLE(this->get_logger(), *this->get_clock(), 5000, "No parameter changes to apply this cycle. Current state: %s, Corner: %.3f, Surf: %.3f, ICP: %d",
+            RCLCPP_SYSTEM_HEALTH_TO_STRING(current_system_health_), current_filter_parameter_corner_, current_filter_parameter_surf_, current_icp_iterations_);
     }
 }
 
@@ -327,9 +547,10 @@ void AdaptiveParameterManager::applyParameterChanges() {
     std::vector<rclcpp::Parameter> params_to_set;
     params_to_set.emplace_back("filter_parameter_corner", current_filter_parameter_corner_);
     params_to_set.emplace_back("filter_parameter_surf", current_filter_parameter_surf_);
+    params_to_set.emplace_back("icp_max_iterations", current_icp_iterations_);
 
-    RCLCPP_DEBUG(this->get_logger(), "Attempting to asynchronously set parameters on '%s': Corner=%.3f, Surf=%.3f",
-                laser_mapping_node_name_.c_str(), current_filter_parameter_corner_, current_filter_parameter_surf_);
+    RCLCPP_DEBUG(this->get_logger(), "Attempting to asynchronously set parameters on '%s': Corner=%.3f, Surf=%.3f, ICP Iterations=%d",
+                laser_mapping_node_name_.c_str(), current_filter_parameter_corner_, current_filter_parameter_surf_, current_icp_iterations_);
 
     auto callback_lambda = [this]
         (std::shared_future<std::vector<rcl_interfaces::msg::SetParametersResult>> future) {
@@ -344,7 +565,7 @@ void AdaptiveParameterManager::applyParameterChanges() {
             return;
         }
         bool all_successful = true;
-        std::vector<std::string> attempted_param_names = {"filter_parameter_corner", "filter_parameter_surf"};
+        std::vector<std::string> attempted_param_names = {"filter_parameter_corner", "filter_parameter_surf", "icp_max_iterations"};
         for (size_t i = 0; i < set_results.size(); ++i) {
             if (!set_results[i].successful) {
                 std::string param_name = (i < attempted_param_names.size()) ? attempted_param_names[i] : "unknown_param";
@@ -364,6 +585,24 @@ void AdaptiveParameterManager::applyParameterChanges() {
 
     laser_mapping_param_client_->set_parameters(params_to_set, callback_lambda);
     RCLCPP_DEBUG(this->get_logger(), "Asynchronous parameter set request sent to '%s'. Result will be logged upon completion.", laser_mapping_node_name_.c_str());
+}
+
+void AdaptiveParameterManager::cpuLoadCallback(const std_msgs::msg::Float32::SharedPtr msg) {
+    latest_cpu_load_ = msg->data;
+    last_cpu_load_timestamp_ = this->now();
+    RCLCPP_DEBUG(this->get_logger(), "Received CPU load: %.2f", latest_cpu_load_);
+}
+
+void AdaptiveParameterManager::memoryUsageCallback(const std_msgs::msg::Float32::SharedPtr msg) {
+    latest_memory_usage_ = msg->data;
+    last_memory_usage_timestamp_ = this->now();
+    RCLCPP_DEBUG(this->get_logger(), "Received Memory usage: %.2f", latest_memory_usage_);
+}
+
+void AdaptiveParameterManager::pipelineLatencyCallback(const std_msgs::msg::Float32::SharedPtr msg) {
+    latest_pipeline_latency_sec_ = msg->data;
+    last_pipeline_latency_timestamp_ = this->now();
+    RCLCPP_DEBUG(this->get_logger(), "Received Pipeline Latency: %.3f s", latest_pipeline_latency_sec_);
 }
 
 } // namespace loam_adaptive_parameter_manager

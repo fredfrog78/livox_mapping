@@ -57,6 +57,7 @@
 #include "adaptive_parameter_manager_types.h"
 #include <rclcpp/rclcpp.hpp>
 #include "std_msgs/msg/int32.hpp"
+#include "std_msgs/msg/float32.hpp" // Added for resource/pipeline metrics
 #include <rclcpp/parameter_client.hpp>
 #include <rclcpp/parameter.hpp>
 
@@ -75,6 +76,9 @@ private:
     // Subscription Callbacks to receive health status from other nodes
     void scanRegistrationHealthCallback(const std_msgs::msg::Int32::SharedPtr msg);
     void laserMappingHealthCallback(const std_msgs::msg::Int32::SharedPtr msg);
+    void cpuLoadCallback(const std_msgs::msg::Float32::SharedPtr msg);
+    void memoryUsageCallback(const std_msgs::msg::Float32::SharedPtr msg);
+    void pipelineLatencyCallback(const std_msgs::msg::Float32::SharedPtr msg);
 
     // Internal methods to update and stabilize health states
     void updateScanRegistrationHealth(ScanRegistrationHealth sr_health);
@@ -107,9 +111,27 @@ private:
     double min_filter_parameter_surf_;
     double max_filter_parameter_surf_;
 
+    // Configuration for ICP iterations
+    int current_icp_iterations_;
+    int default_icp_iterations_;
+    int min_icp_iterations_;
+    int max_icp_iterations_;
+
     // Step sizes for parameter adjustments
     double adjustment_step_small_;              // For gentle probing or cautious adjustments
     double adjustment_step_normal_;             // For standard reactions to issues
+
+    // Thresholds for resource monitoring (loaded from ROS parameters)
+    double cpu_load_threshold_high_;
+    double cpu_load_threshold_critical_;
+    double memory_usage_threshold_high_;
+    double memory_usage_threshold_critical_;
+    double pipeline_latency_threshold_high_sec_;
+    double pipeline_latency_threshold_critical_sec_;
+    double metric_stale_threshold_sec_;
+
+    // Step size for ICP iteration adjustments
+    int icp_iteration_adjustment_step_;
 
     // State variables for overload detection and cooldown mechanism
     int consecutive_icp_issue_warnings_;      // Counts consecutive LASER_MAPPING_ICP_UNSTABLE states
@@ -123,6 +145,7 @@ private:
     void initializeParameters();                // Loads initial parameter values and configurations
     void determineSystemHealth();               // Determines current_system_health_ from stabilized states
     void applyParameterChanges();               // Applies changes to target node via parameter client
+    bool isMetricFresh(const rclcpp::Time& metric_timestamp) const; // Checks if a metric is recent enough
 
     // ROS 2 specific members
     rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr sr_health_sub_;
@@ -130,6 +153,19 @@ private:
     rclcpp::TimerBase::SharedPtr processing_timer_;        // Timer to periodically call processHealthAndAdjustParameters
     std::shared_ptr<rclcpp::AsyncParametersClient> laser_mapping_param_client_; // Async client to set parameters on target
     std::string laser_mapping_node_name_;       // Name of the target node (e.g., "laser_mapping_node")
+
+    // Resource and Pipeline Metrics
+    float latest_cpu_load_;
+    float latest_memory_usage_;
+    float latest_pipeline_latency_sec_;
+    rclcpp::Time last_cpu_load_timestamp_;
+    rclcpp::Time last_memory_usage_timestamp_;
+    rclcpp::Time last_pipeline_latency_timestamp_;
+
+    // Subscribers for resource and pipeline metrics
+    rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr cpu_load_sub_;
+    rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr memory_usage_sub_;
+    rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr pipeline_latency_sub_;
 };
 
 } // namespace loam_adaptive_parameter_manager
