@@ -212,29 +212,20 @@ if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
 
   # Add the test executable for AdaptiveParameterManager
-  # It includes its own source file and the .cpp of the class being tested
-  # This is a simpler approach when the class isn't built as a separate library
-  add_executable(
-    test_adaptive_parameter_manager
+  # The explicit add_executable is removed. ament_add_gtest will create the target.
+
+  # Add GTest and specify all sources needed for the test executable
+  ament_add_gtest(test_adaptive_parameter_manager
     test/test_adaptive_parameter_manager.cpp
-    src/adaptive_parameter_manager.cpp # Include the source of the class under test
-    src/adaptive_parameter_manager_types.h # Include if not pulled by .cpp, or ensure src is in include_directories for test
+    src/adaptive_parameter_manager.cpp # Source of the class under test
+    # src/adaptive_parameter_manager_types.h # .h files are not typically listed here, handled by include_directories
   )
 
-  # Link against necessary libraries
+  # Link against necessary libraries for the test executable
   ament_target_dependencies(test_adaptive_parameter_manager
     rclcpp
     std_msgs
     # Add any other dependencies that adaptive_parameter_manager.cpp needs
-  )
-
-  # Add GTest
-  ament_add_gtest(test_adaptive_parameter_manager
-    # The source file for the test is already part of add_executable
-    # For ament_add_gtest, if the sources are already in an executable,
-    # you might not need to list it again, or it might be specific about test sources.
-    # Let's list the test source explicitly as per common practice.
-    test/test_adaptive_parameter_manager.cpp
   )
 
   # Ensure the test executable can find headers from src/
