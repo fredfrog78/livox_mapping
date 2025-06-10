@@ -393,6 +393,33 @@ The `AdaptiveParameterManager` would operate as follows:
 -   The `AdaptiveParameterManager` internally uses a ROS 2 asynchronous parameter client for setting parameters on the `laserMapping` node. This ensures non-blocking behavior within the manager's own processing loop and resolves potential executor conflicts.
 -   For more detailed information on the internal logic, specific thresholds, assumptions, and implementation notes, please refer to the comprehensive documentation comments within the `src/adaptive_parameter_manager.h` and `src/adaptive_parameter_manager.cpp` files.
 
+## Point Cloud Accumulator Node
+
+### Purpose
+The `PointCloudAccumulatorNode` is a ROS 2 node that subscribes to registered point cloud messages (typically from a SLAM algorithm like LOAM) and progressively saves them into a single, timestamped PLY (Polygon File Format) map file. This allows for the generation of a persistent point cloud map of the environment explored by the LiDAR. The node ensures that the PLY file is correctly finalized with an updated point count when the system is shut down (e.g., via Ctrl+C).
+
+### Subscribed Topic
+*   **Topic Name**: `/velodyne_cloud_registered`
+*   **Message Type**: `sensor_msgs::msg::PointCloud2`
+
+### Output
+*   **File Type**: Polygon File Format (`.ply`)
+*   **Filename Format**: `map_YYYYMMDD_HHMMSS.ply` (e.g., `map_20231026_143000.ply`)
+*   **Location**: The directory specified by the `output_directory` parameter.
+
+### How to Launch
+The `PointCloudAccumulatorNode` is integrated into the existing launch system and can be started using launch files such as `mapping_horizon_launch.py`. A launch argument is provided to specify the output directory for the saved PLY maps.
+
+**Example:**
+```bash
+ros2 launch livox_mapping mapping_horizon_launch.py accumulator_output_dir:=/path/to/my/ply_maps
+```
+This command launches the LOAM mapping pipeline along with the `PointCloudAccumulatorNode`. The accumulated point cloud map will be saved in the `/path/to/my/ply_maps` directory.
+
+### Parameters
+*   **`output_directory`** (string, default: `./ply_maps_from_launch` as set in `mapping_horizon_launch.py`)
+    *   **Description**: Specifies the directory where the output PLY map files will be saved. If a relative path is given, it's typically relative to where the ROS 2 launch command was executed or the node's working directory if not set otherwise. It's recommended to use absolute paths for clarity. The node will attempt to create this directory if it doesn't exist.
+
 ## 10. Acknowledgments
 This package is based on the original LOAM algorithm by J. Zhang and S. Singh. We also acknowledge inspiration and reference from LOAM_NOTED.
 *   LOAM: J. Zhang and S. Singh. LOAM: Lidar Odometry and Mapping in Real-time. Robotics: Science and Systems Conference (RSS). Berkeley, CA, July 2014.

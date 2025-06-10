@@ -56,6 +56,7 @@ include_directories(
   ${Eigen3_INCLUDE_DIRS}
   ${PCL_INCLUDE_DIRS}
   ${OpenCV_INCLUDE_DIRS}
+  src # For PlyWriter.h if included as "PlyWriter.h" from pointcloud_accumulator_node.cpp
 )
 
 # Define a list for external libraries
@@ -166,6 +167,23 @@ if(OpenMP_FOUND) # Though unlikely to be beneficial for this node's logic
   target_link_libraries(adaptive_parameter_manager_node OpenMP::OpenMP_CXX)
 endif()
 
+# PointCloud Accumulator Node
+add_executable(pointcloud_accumulator_node
+  src/pointcloud_accumulator_node.cpp
+  src/PlyWriter.cpp
+)
+ament_target_dependencies(pointcloud_accumulator_node
+  rclcpp
+  sensor_msgs
+  pcl_conversions
+)
+target_link_libraries(pointcloud_accumulator_node
+  ${PCL_LIBRARIES}
+)
+# Ensure C++17 features are compiled for the node (project globally sets C++17)
+target_compile_features(pointcloud_accumulator_node PRIVATE cxx_std_17)
+
+
 # Install executables
 install(TARGETS
   livox_repub
@@ -173,6 +191,7 @@ install(TARGETS
   loam_scanRegistration_horizon
   loam_laserMapping
   adaptive_parameter_manager_node
+  pointcloud_accumulator_node # Added new node
   DESTINATION lib/${PROJECT_NAME}
 )
 

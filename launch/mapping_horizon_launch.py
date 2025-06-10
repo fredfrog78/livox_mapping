@@ -97,6 +97,12 @@ def generate_launch_description():
         description='Processing timer period in seconds for AdaptiveParameterManager'
     )
 
+    declare_accumulator_output_dir_arg = DeclareLaunchArgument(
+        'accumulator_output_dir',
+        default_value='./ply_maps_from_launch',
+        description='Output directory for the PLY map files from PointCloudAccumulatorNode.'
+    )
+
     # Set use_sim_time parameter (already existed)
     set_use_sim_time = SetParameter(name='use_sim_time', value=False)
 
@@ -201,5 +207,16 @@ def generate_launch_description():
         node_scan_registration_horizon,
         node_laser_mapping,
         node_adaptive_parameter_manager, # Added APM node
-        node_rviz
+        node_rviz,
+        # PointCloud Accumulator Node
+        declare_accumulator_output_dir_arg,
+        Node(
+            package='livox_mapping',
+            executable='pointcloud_accumulator_node',
+            name='pointcloud_accumulator_node',
+            output='screen',
+            parameters=[{
+                'output_directory': LaunchConfiguration('accumulator_output_dir')
+            }]
+        )
     ])
