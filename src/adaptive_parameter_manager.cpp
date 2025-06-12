@@ -59,6 +59,9 @@
 #include <chrono>    // For timer duration and service timeout
 #include <stdexcept> // For std::runtime_error
 #include <cmath>     // For std::abs
+#include <sstream>   // For std::ostringstream
+#include <iomanip>   // For std::fixed, std::setprecision
+#include <limits>    // For std::numeric_limits in callback
 
 namespace loam_adaptive_parameter_manager {
 
@@ -153,6 +156,15 @@ AdaptiveParameterManager::AdaptiveParameterManager() : Node("adaptive_parameter_
         1s,
         std::bind(&AdaptiveParameterManager::processHealthAndAdjustParameters, this));
     RCLCPP_INFO(this->get_logger(), "Processing timer started (1s period). Will adjust parameters for: %s", laser_mapping_node_name_.c_str());
+
+    healthy_param_stats_.reset();
+    RCLCPP_INFO(this->get_logger(), "Parameter statistics initialized.");
+
+    stats_service_ = this->create_service<livox_mapping::srv::GetParameterStatistics>(
+        "~/get_parameter_statistics",
+        std::bind(&AdaptiveParameterManager::getStatisticsServiceCallback, this,
+                  std::placeholders::_1, std::placeholders::_2));
+    RCLCPP_INFO(this->get_logger(), "GetParameterStatistics service created at: %s/get_parameter_statistics", this->get_name());
 }
 
 bool AdaptiveParameterManager::isMetricFresh(const rclcpp::Time& metric_timestamp) const {
@@ -396,6 +408,36 @@ void AdaptiveParameterManager::processHealthAndAdjustParameters() {
                     RCLCPP_SYSTEM_HEALTH_TO_STRING(health_before_update));
     }
 
+    // --- Begin Statistics Collection for HEALTHY state ---
+    if (current_system_health_ == SystemHealth::HEALTHY) {
+        healthy_param_stats_.sum_filter_corner += current_filter_parameter_corner_;
+        healthy_param_stats_.sum_filter_surf += current_filter_parameter_surf_;
+        healthy_param_stats_.sum_icp_iterations += current_icp_iterations_;
+        healthy_param_stats_.count++;
+
+        if (current_filter_parameter_corner_ < healthy_param_stats_.min_filter_corner) {
+            healthy_param_stats_.min_filter_corner = current_filter_parameter_corner_;
+        }
+        if (current_filter_parameter_corner_ > healthy_param_stats_.max_filter_corner) {
+            healthy_param_stats_.max_filter_corner = current_filter_parameter_corner_;
+        }
+
+        if (current_filter_parameter_surf_ < healthy_param_stats_.min_filter_surf) {
+            healthy_param_stats_.min_filter_surf = current_filter_parameter_surf_;
+        }
+        if (current_filter_parameter_surf_ > healthy_param_stats_.max_filter_surf) {
+            healthy_param_stats_.max_filter_surf = current_filter_parameter_surf_;
+        }
+
+        if (current_icp_iterations_ < healthy_param_stats_.min_icp_iterations) {
+            healthy_param_stats_.min_icp_iterations = current_icp_iterations_;
+        }
+        if (current_icp_iterations_ > healthy_param_stats_.max_icp_iterations) {
+            healthy_param_stats_.max_icp_iterations = current_icp_iterations_;
+        }
+    }
+    // --- End Statistics Collection ---
+
     double prev_corner_filter = current_filter_parameter_corner_;
     double prev_surf_filter = current_filter_parameter_surf_;
     int prev_icp_iterations = current_icp_iterations_;
@@ -603,6 +645,54 @@ void AdaptiveParameterManager::pipelineLatencyCallback(const std_msgs::msg::Floa
     latest_pipeline_latency_sec_ = msg->data;
     last_pipeline_latency_timestamp_ = this->now();
     RCLCPP_DEBUG(this->get_logger(), "Received Pipeline Latency: %.3f s", latest_pipeline_latency_sec_);
+}
+
+void AdaptiveParameterManager::getStatisticsServiceCallback(
+    const std::shared_ptr<livox_mapping::srv::GetParameterStatistics::Request> request,
+    std::shared_ptr<livox_mapping::srv::GetParameterStatistics::Response> response) {
+
+    (void)request; // Suppress unused parameter warning if request is empty
+
+    std::ostringstream summary_ss;
+    summary_ss << std::fixed << std::setprecision(3); // Set precision for floating point numbers
+
+    summary_ss << "AdaptiveParameterManager Statistics (during HEALTHY state):\n";
+    summary_ss << "----------------------------------------------------------\n";
+    summary_ss << "Total HEALTHY cycles recorded: " << healthy_param_stats_.count << "\n\n";
+
+    if (healthy_param_stats_.count > 0) {
+        // Corner Filter Statistics
+        summary_ss << "Corner Filter Size:\n";
+        summary_ss << "  Average: " << (healthy_param_stats_.sum_filter_corner / healthy_param_stats_.count) << "\n";
+        summary_ss << "  Min    : " << healthy_param_stats_.min_filter_corner << "\n";
+        summary_ss << "  Max    : " << healthy_param_stats_.max_filter_corner << "\n\n";
+
+        // Surf Filter Statistics
+        summary_ss << "Surf Filter Size:\n";
+        summary_ss << "  Average: " << (healthy_param_stats_.sum_filter_surf / healthy_param_stats_.count) << "\n";
+        summary_ss << "  Min    : " << healthy_param_stats_.min_filter_surf << "\n";
+        summary_ss << "  Max    : " << healthy_param_stats_.max_filter_surf << "\n\n";
+
+        // ICP Iterations Statistics
+        summary_ss << "ICP Iterations:\n";
+        summary_ss << "  Average: " << static_cast<double>(healthy_param_stats_.sum_icp_iterations) / healthy_param_stats_.count << "\n"; // Cast for double division
+        if (healthy_param_stats_.min_icp_iterations == std::numeric_limits<int>::max()) {
+             summary_ss << "  Min    : N/A (no data)\n";
+        } else {
+             summary_ss << "  Min    : " << healthy_param_stats_.min_icp_iterations << "\n";
+        }
+        if (healthy_param_stats_.max_icp_iterations == std::numeric_limits<int>::min()) {
+             summary_ss << "  Max    : N/A (no data)\n";
+        } else {
+             summary_ss << "  Max    : " << healthy_param_stats_.max_icp_iterations << "\n";
+        }
+    } else {
+        summary_ss << "No HEALTHY cycles recorded yet to calculate parameter statistics.\n";
+    }
+    summary_ss << "----------------------------------------------------------\n";
+
+    response->statistics_summary = summary_ss.str();
+    RCLCPP_INFO(this->get_logger(), "GetParameterStatistics service called. Responding with summary.");
 }
 
 } // namespace loam_adaptive_parameter_manager

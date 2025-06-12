@@ -34,6 +34,7 @@ find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED) # For tf2::fromMsg, tf2::toMsg with geometry_msgs
 find_package(visualization_msgs REQUIRED)
+find_package(rosidl_default_generators REQUIRED) # Added for service generation
 # find_package(pcl_ros REQUIRED) # REMOVED
 
 # Find external libraries
@@ -206,6 +207,11 @@ target_link_libraries(pointcloud_accumulator_node
 # Ensure C++17 features are compiled for the node (project globally sets C++17)
 target_compile_features(pointcloud_accumulator_node PRIVATE cxx_std_17)
 
+# Generate ROS2 interfaces (services, messages, actions)
+rosidl_generate_interfaces(${PROJECT_NAME}
+  "srv/GetParameterStatistics.srv"
+  # Add other .msg or .action files here if any
+)
 
 # Install executables
 install(TARGETS
@@ -251,6 +257,8 @@ if(BUILD_TESTING)
   ament_target_dependencies(test_adaptive_parameter_manager
     rclcpp
     std_msgs
+  # No need to explicitly add ${PROJECT_NAME}_interfaces for srv in same package
+  # ament_target_dependencies handles discovery via rosidl_generate_interfaces
   )
 
   target_link_libraries(test_adaptive_parameter_manager

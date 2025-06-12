@@ -60,6 +60,9 @@
 #include "std_msgs/msg/float32.hpp" // Added for resource/pipeline metrics
 #include <rclcpp/parameter_client.hpp>
 #include <rclcpp/parameter.hpp>
+#include <string>
+#include <limits> // For std::numeric_limits
+#include "livox_mapping/srv/get_parameter_statistics.hpp" // Adjusted include path
 
 namespace loam_adaptive_parameter_manager {
 
@@ -168,6 +171,41 @@ private:
     rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr cpu_load_sub_;
     rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr memory_usage_sub_;
     rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr pipeline_latency_sub_;
+
+    // Statistics
+    struct ParameterStats {
+        double sum_filter_corner = 0.0;
+        double sum_filter_surf = 0.0;
+        long long sum_icp_iterations = 0;
+        long long count = 0;
+
+        double min_filter_corner = std::numeric_limits<double>::max();
+        double max_filter_corner = std::numeric_limits<double>::lowest();
+        double min_filter_surf = std::numeric_limits<double>::max();
+        double max_filter_surf = std::numeric_limits<double>::lowest();
+        int min_icp_iterations = std::numeric_limits<int>::max();
+        int max_icp_iterations = std::numeric_limits<int>::min();
+
+        void reset() {
+            sum_filter_corner = 0.0;
+            sum_filter_surf = 0.0;
+            sum_icp_iterations = 0;
+            count = 0;
+            min_filter_corner = std::numeric_limits<double>::max();
+            max_filter_corner = std::numeric_limits<double>::lowest();
+            min_filter_surf = std::numeric_limits<double>::max();
+            max_filter_surf = std::numeric_limits<double>::lowest();
+            min_icp_iterations = std::numeric_limits<int>::max();
+            max_icp_iterations = std::numeric_limits<int>::min();
+        }
+    };
+    ParameterStats healthy_param_stats_;
+
+    // ROS Service Server for statistics
+    rclcpp::Service<livox_mapping::srv::GetParameterStatistics>::SharedPtr stats_service_;
+    void getStatisticsServiceCallback(
+        const std::shared_ptr<livox_mapping::srv::GetParameterStatistics::Request> request,
+        std::shared_ptr<livox_mapping::srv::GetParameterStatistics::Response> response);
 };
 
 } // namespace loam_adaptive_parameter_manager
