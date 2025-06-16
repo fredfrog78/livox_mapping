@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.8)
 project(livox_mapping)
+set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
 
 # Set C++ standard to 17
 set(CMAKE_CXX_STANDARD 17)
