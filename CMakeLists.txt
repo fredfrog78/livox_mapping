@@ -212,6 +212,8 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/GetParameterStatistics.srv"
   # Add other .msg or .action files here if any
 )
+# Ensure the library target waits for code generation
+add_dependencies(adaptive_parameter_manager_lib ${PROJECT_NAME}__cpp)
 
 # Install executables
 install(TARGETS
