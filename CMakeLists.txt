@@ -166,9 +166,15 @@ ament_target_dependencies(adaptive_parameter_manager_lib
   "std_msgs"
 )
 
-target_include_directories(adaptive_parameter_manager_lib PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src> # For adaptive_parameter_manager.h
-  $<INSTALL_INTERFACE:include> # Assuming headers might be installed to include/
+target_include_directories(adaptive_parameter_manager_lib
+  PUBLIC
+    # For headers within the same package's src directory (e.g., adaptive_parameter_manager.h)
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
+    # For installation, if headers were in an 'include' dir and installed
+    $<INSTALL_INTERFACE:include>
+  PRIVATE
+    # For the library to find its own generated message/service headers during compilation
+    ${CMAKE_CURRENT_BINARY_DIR}/rosidl_generator_cpp
 )
 
 # Adaptive Parameter Manager Node Executable
