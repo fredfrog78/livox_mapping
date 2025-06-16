@@ -203,6 +203,9 @@ target_link_libraries(adaptive_parameter_manager_node
   adaptive_parameter_manager_lib
   # rclcpp::rclcpp # Provided by ament_target_dependencies
 )
+set_target_properties(adaptive_parameter_manager_node PROPERTIES
+  INSTALL_RPATH "$ORIGIN/../lib;$ORIGIN"
+)
 
 # No direct PCL, OpenCV, or Eigen linking needed for adaptive_parameter_manager_node based on its current code.
 # If it were to process point clouds directly, these would be added.
