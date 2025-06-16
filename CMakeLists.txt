@@ -161,14 +161,13 @@ add_library(adaptive_parameter_manager_lib
   src/adaptive_parameter_manager.cpp
 )
 
-ament_target_dependencies(adaptive_parameter_manager_lib
-  "rclcpp"
-  "std_msgs"
-  "rosidl_default_runtime" # For the generated service code
-)
+# ament_target_dependencies block removed
 
 target_link_libraries(adaptive_parameter_manager_lib
   PUBLIC
+    rclcpp::rclcpp
+    std_msgs::std_msgs
+    rosidl_default_runtime::rosidl_default_runtime
     ${PROJECT_NAME}__rosidl_typesupport_cpp
 )
 
