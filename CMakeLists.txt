@@ -168,13 +168,18 @@ ament_target_dependencies(adaptive_parameter_manager_lib
 
 target_include_directories(adaptive_parameter_manager_lib
   PUBLIC
-    # For headers within the same package's src directory (e.g., adaptive_parameter_manager.h)
+    # For adaptive_parameter_manager.h (which is in src/)
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
-    # For installation, if headers were in an 'include' dir and installed
+    # For generated message/service headers needed by adaptive_parameter_manager.h or its users
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/rosidl_generator_cpp>
+
+    # For installation of headers from 'src/' (if adaptive_parameter_manager.h is installed)
+    # This might need adjustment based on actual install rules for headers.
+    # If adaptive_parameter_manager.h is not installed, this specific INSTALL_INTERFACE for src might not be needed.
+    # Or, if headers from src are installed to e.g. "include/livox_mapping", it would be:
+    # $<INSTALL_INTERFACE:include/livox_mapping>
+    # For now, keep the existing INSTALL_INTERFACE for 'include' assuming some headers might go there.
     $<INSTALL_INTERFACE:include>
-  PRIVATE
-    # For the library to find its own generated message/service headers during compilation
-    ${CMAKE_CURRENT_BINARY_DIR}/rosidl_generator_cpp
 )
 
 # Adaptive Parameter Manager Node Executable
