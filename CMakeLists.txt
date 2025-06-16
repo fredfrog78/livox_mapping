@@ -165,7 +165,11 @@ ament_target_dependencies(adaptive_parameter_manager_lib
   "rclcpp"
   "std_msgs"
   "rosidl_default_runtime" # For the generated service code
-  ${PROJECT_NAME}__rosidl_typesupport_cpp # For linking C++ typesupport
+)
+
+target_link_libraries(adaptive_parameter_manager_lib
+  PUBLIC
+    ${PROJECT_NAME}__rosidl_typesupport_cpp
 )
 
 target_include_directories(adaptive_parameter_manager_lib
