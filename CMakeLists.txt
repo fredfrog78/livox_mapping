@@ -166,6 +166,8 @@ add_library(adaptive_parameter_manager_lib
 target_link_libraries(adaptive_parameter_manager_lib
   PUBLIC
     rclcpp::rclcpp
+    ${std_msgs_LIBRARIES}
+    ${rosidl_default_runtime_LIBRARIES}
     ${PROJECT_NAME}__rosidl_typesupport_cpp
 )
 
@@ -175,6 +177,8 @@ target_include_directories(adaptive_parameter_manager_lib
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
     # For generated message/service headers needed by adaptive_parameter_manager.h or its users
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/rosidl_generator_cpp>
+    $<BUILD_INTERFACE:${std_msgs_INCLUDE_DIRS}>
+    $<BUILD_INTERFACE:${rosidl_default_runtime_INCLUDE_DIRS}>
 
     # For installation of headers from 'src/' (if adaptive_parameter_manager.h is installed)
     # This might need adjustment based on actual install rules for headers.
