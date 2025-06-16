@@ -166,7 +166,6 @@ add_library(adaptive_parameter_manager_lib
 target_link_libraries(adaptive_parameter_manager_lib
   PUBLIC
     rclcpp::rclcpp
-    std_msgs::std_msgs
     rosidl_default_runtime::rosidl_default_runtime
     ${PROJECT_NAME}__rosidl_typesupport_cpp
 )
