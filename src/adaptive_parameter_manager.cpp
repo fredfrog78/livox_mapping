@@ -229,6 +229,8 @@ void AdaptiveParameterManager::initializeParameters() {
     this->get_parameter("icp_iterations.adjustment_step", icp_iteration_adjustment_step_);
 
     // Thresholds for resource monitoring
+    this->declare_parameter<double>("thresholds.cpu_load.moderate", 0.65);
+    this->get_parameter("thresholds.cpu_load.moderate", cpu_load_threshold_moderate_);
     this->declare_parameter<double>("thresholds.cpu_load.high", 0.85);
     this->get_parameter("thresholds.cpu_load.high", cpu_load_threshold_high_);
     this->declare_parameter<double>("thresholds.cpu_load.critical", 0.95);
@@ -250,7 +252,8 @@ void AdaptiveParameterManager::initializeParameters() {
     // Log initial settings
     RCLCPP_INFO(this->get_logger(), "ICP Iterations: Initial %d (Min: %d, Max: %d, Step: %d)",
                 current_icp_iterations_, min_icp_iterations_, max_icp_iterations_, icp_iteration_adjustment_step_);
-    RCLCPP_INFO(this->get_logger(), "CPU Thresholds: High %.2f, Critical %.2f", cpu_load_threshold_high_, cpu_load_threshold_critical_);
+    RCLCPP_INFO(this->get_logger(), "CPU Thresholds: Moderate %.2f, High %.2f, Critical %.2f",
+                   cpu_load_threshold_moderate_, cpu_load_threshold_high_, cpu_load_threshold_critical_);
     RCLCPP_INFO(this->get_logger(), "Mem Thresholds: High %.2f, Critical %.2f", memory_usage_threshold_high_, memory_usage_threshold_critical_);
     RCLCPP_INFO(this->get_logger(), "Latency Thresholds: High %.2fs, Critical %.2fs", pipeline_latency_threshold_high_sec_, pipeline_latency_threshold_critical_sec_);
     RCLCPP_INFO(this->get_logger(), "Metric Stale Threshold: %.2fs", metric_stale_threshold_sec_);
@@ -522,23 +525,53 @@ void AdaptiveParameterManager::processHealthAndAdjustParameters() {
                 break;
 
             case SystemHealth::HEALTHY:
-                RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 2000,"State: HEALTHY. (Consecutive healthy cycles: %d)", consecutive_healthy_cycles_);
+                // RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 2000,"State: HEALTHY. (Consecutive healthy cycles: %d)", consecutive_healthy_cycles_); // Old log
                 if (consecutive_healthy_cycles_ >= PROBING_AFTER_N_HEALTHY_CYCLES_) {
-                    RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 2000, "Action: Probing for better accuracy/efficiency (Cur ICP: %d, Cur Corner: %.3f, Cur Surf: %.3f).", current_icp_iterations_, current_filter_parameter_corner_, current_filter_parameter_surf_);
-                    if (current_icp_iterations_ < max_icp_iterations_) {
+                    RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
+                                 "HEALTHY: Probing. CPU: %.2f (Fresh: %s, Mod Thr: %.2f). ICP: %d (Max: %d), Corner: %.3f (Min: %.3f), Surf: %.3f (Min: %.3f).",
+                                 latest_cpu_load_, isMetricFresh(last_cpu_load_timestamp_) ? "yes" : "no", cpu_load_threshold_moderate_,
+                                 current_icp_iterations_, max_icp_iterations_,
+                                 current_filter_parameter_corner_, min_filter_parameter_corner_,
+                                 current_filter_parameter_surf_, min_filter_parameter_surf_);
+
+                    bool cpu_metric_fresh_and_valid = isMetricFresh(last_cpu_load_timestamp_);
+                    bool can_increase_icp = current_icp_iterations_ < max_icp_iterations_;
+                    bool cpu_ok_for_icp_increase = !cpu_metric_fresh_and_valid || (cpu_metric_fresh_and_valid && latest_cpu_load_ < cpu_load_threshold_moderate_);
+
+                    if (can_increase_icp && cpu_ok_for_icp_increase) {
                         current_icp_iterations_ = std::min(max_icp_iterations_, current_icp_iterations_ + icp_iteration_adjustment_step_);
-                    } else if (current_filter_parameter_corner_ > min_filter_parameter_corner_ || current_filter_parameter_surf_ > min_filter_parameter_surf_) {
-                        if (current_filter_parameter_corner_ > min_filter_parameter_corner_) {
-                             current_filter_parameter_corner_ = std::max(min_filter_parameter_corner_, current_filter_parameter_corner_ - adjustment_step_small_);
-                        }
-                        if (current_filter_parameter_surf_ > min_filter_parameter_surf_) {
-                            current_filter_parameter_surf_ = std::max(min_filter_parameter_surf_, current_filter_parameter_surf_ - adjustment_step_small_);
-                        }
+                        RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
+                                             "HEALTHY: Increasing ICP iterations to %d.", current_icp_iterations_);
                     } else {
-                         RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 5000, "Max accuracy parameters already set (Max ICP iter: %d, Min filters: C=%.3f, S=%.3f).", max_icp_iterations_, min_filter_parameter_corner_, min_filter_parameter_surf_);
+                        // Did not increase ICP. Log reason if it wasn't already at max.
+                        if (can_increase_icp && !cpu_ok_for_icp_increase) { // Was able to increase, but CPU was too high
+                             RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
+                                                 "HEALTHY: CPU load (%.2f) is at/above moderate (%.2f). Not increasing ICP iterations from %d.",
+                                                 latest_cpu_load_, cpu_load_threshold_moderate_, current_icp_iterations_);
+                        } else if (!can_increase_icp) { // Already at max ICP
+                            RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
+                                                 "HEALTHY: ICP iterations already at max (%d).", max_icp_iterations_);
+                        }
+
+                        // Now, since ICP wasn't increased (or was already maxed), try to reduce filters
+                        if (current_filter_parameter_corner_ > min_filter_parameter_corner_ || current_filter_parameter_surf_ > min_filter_parameter_surf_) {
+                            if (current_filter_parameter_corner_ > min_filter_parameter_corner_) {
+                                 current_filter_parameter_corner_ = std::max(min_filter_parameter_corner_, current_filter_parameter_corner_ - adjustment_step_small_);
+                            }
+                            if (current_filter_parameter_surf_ > min_filter_parameter_surf_) {
+                                current_filter_parameter_surf_ = std::max(min_filter_parameter_surf_, current_filter_parameter_surf_ - adjustment_step_small_);
+                            }
+                            RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
+                                                 "HEALTHY: Reducing filter sizes. New Corner: %.3f, New Surf: %.3f",
+                                                 current_filter_parameter_corner_, current_filter_parameter_surf_);
+                        } else { // ICP is at max (or held due to CPU), and Filters are at min
+                            RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 5000,
+                                                 "HEALTHY: Max accuracy parameters likely set or CPU limiting ICP increase. (ICP: %d, Filters: C=%.3f, S=%.3f, CPU: %.2f)",
+                                                 current_icp_iterations_, min_filter_parameter_corner_, min_filter_parameter_surf_, latest_cpu_load_);
+                        }
                     }
-                } else {
-                     RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 2000, "Action: Healthy, waiting for %d consecutive cycles before probing (currently %d). Holding parameters.",
+                } else { // Not enough healthy cycles yet for probing
+                     RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 2000, "HEALTHY: Waiting for %d consecutive cycles before probing (currently %d). Holding parameters.",
                                 PROBING_AFTER_N_HEALTHY_CYCLES_, consecutive_healthy_cycles_);
                 }
                 break;

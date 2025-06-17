@@ -124,6 +124,7 @@ protected:
     int icp_iteration_adjustment_step_;
 
     // Thresholds for resource monitoring (loaded from ROS parameters)
+    double cpu_load_threshold_moderate_;
     double cpu_load_threshold_high_;
     double cpu_load_threshold_critical_;
     double memory_usage_threshold_high_;
