@@ -527,52 +527,66 @@ void AdaptiveParameterManager::processHealthAndAdjustParameters() {
             case SystemHealth::HEALTHY:
                 if (consecutive_healthy_cycles_ >= PROBING_AFTER_N_HEALTHY_CYCLES_) {
                     RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
-                                 "HEALTHY: Probing. CPU: %.2f (Fresh: %s, Mod Thr: %.2f). ICP: %d (Max: %d), Corner: %.3f (Min: %.3f), Surf: %.3f (Min: %.3f).",
+                                 "HEALTHY: Probing. CPU: %.2f (Fresh: %s, Mod Thr: %.2f). Latency: %.3fs (Fresh: %s, High Thr: %.2fs). ICP: %d (Max: %d), Corner: %.3f (Min: %.3f), Surf: %.3f (Min: %.3f).",
                                  latest_cpu_load_, isMetricFresh(last_cpu_load_timestamp_) ? "yes" : "no", cpu_load_threshold_moderate_,
+                                 latest_pipeline_latency_sec_, isMetricFresh(last_pipeline_latency_timestamp_) ? "yes" : "no", pipeline_latency_threshold_high_sec_,
                                  current_icp_iterations_, max_icp_iterations_,
                                  current_filter_parameter_corner_, min_filter_parameter_corner_,
                                  current_filter_parameter_surf_, min_filter_parameter_surf_);
 
-                    bool cpu_metric_fresh_and_valid = isMetricFresh(last_cpu_load_timestamp_);
+                    bool cpu_metric_fresh = isMetricFresh(last_cpu_load_timestamp_);
+                    bool latency_metric_fresh = isMetricFresh(last_pipeline_latency_timestamp_);
                     bool can_increase_icp = current_icp_iterations_ < max_icp_iterations_;
-                    // MODIFIED CONDITION: CPU metric must be fresh AND below moderate threshold to allow ICP increase
-                    bool cpu_ok_for_icp_increase = cpu_metric_fresh_and_valid && (latest_cpu_load_ < cpu_load_threshold_moderate_);
 
-                    if (can_increase_icp && cpu_ok_for_icp_increase) {
+                    bool cpu_ok_for_aggressive_params = cpu_metric_fresh && (latest_cpu_load_ < cpu_load_threshold_moderate_);
+                    bool latency_ok_for_aggressive_params = latency_metric_fresh && (latest_pipeline_latency_sec_ < pipeline_latency_threshold_high_sec_);
+
+                    if (can_increase_icp && cpu_ok_for_aggressive_params && latency_ok_for_aggressive_params) {
                         current_icp_iterations_ = std::min(max_icp_iterations_, current_icp_iterations_ + icp_iteration_adjustment_step_);
                         RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
-                                             "HEALTHY: Increasing ICP iterations to %d (CPU load %.2f < moderate threshold %.2f and fresh).",
-                                             current_icp_iterations_, latest_cpu_load_, cpu_load_threshold_moderate_);
+                                             "HEALTHY: Increasing ICP iterations to %d (CPU load %.2f < moderate %.2f, Latency %.3fs < high %.2fs; both fresh).",
+                                             current_icp_iterations_, latest_cpu_load_, cpu_load_threshold_moderate_, latest_pipeline_latency_sec_, pipeline_latency_threshold_high_sec_);
                     } else {
                         // Did not increase ICP. Log reason.
-                        if (!can_increase_icp) { // Already at max ICP
-                            RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
-                                                 "HEALTHY: ICP iterations already at max (%d).", max_icp_iterations_);
-                        } else if (!cpu_metric_fresh_and_valid) { // CPU metric stale
-                             RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
-                                                 "HEALTHY: CPU metric stale. Not increasing ICP iterations from %d. Holding steady.",
-                                                 current_icp_iterations_);
-                        } else { // CPU metric is fresh but not OK for increase (i.e., at or above moderate)
-                             RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
-                                                 "HEALTHY: CPU load (%.2f) is at/above moderate (%.2f). Not increasing ICP iterations from %d.",
-                                                 latest_cpu_load_, cpu_load_threshold_moderate_, current_icp_iterations_);
+                        if (!can_increase_icp) {
+                            RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 2000, "HEALTHY: ICP iterations already at max (%d).", max_icp_iterations_);
+                        } else if (!cpu_ok_for_aggressive_params) {
+                            if (!cpu_metric_fresh) {
+                                 RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 2000, "HEALTHY: CPU metric stale. Not increasing ICP iterations from %d.", current_icp_iterations_);
+                            } else { // CPU fresh but too high
+                                 RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 2000, "HEALTHY: CPU load (%.2f) at/above moderate (%.2f). Not increasing ICP from %d.", latest_cpu_load_, cpu_load_threshold_moderate_, current_icp_iterations_);
+                            }
+                        } else if (!latency_ok_for_aggressive_params) { // CPU was ok, but latency was not
+                            if (!latency_metric_fresh) {
+                                RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 2000, "HEALTHY: Pipeline latency metric stale. Not increasing ICP iterations from %d.", current_icp_iterations_);
+                            } else { // Latency fresh but too high
+                                RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 2000, "HEALTHY: Pipeline latency (%.3fs) at/above high (%.2fs). Not increasing ICP from %d.", latest_pipeline_latency_sec_, pipeline_latency_threshold_high_sec_, current_icp_iterations_);
+                            }
                         }
 
-                        // Now, since ICP wasn't increased (or was already maxed), try to reduce filters
-                        if (current_filter_parameter_corner_ > min_filter_parameter_corner_ || current_filter_parameter_surf_ > min_filter_parameter_surf_) {
-                            if (current_filter_parameter_corner_ > min_filter_parameter_corner_) {
-                                 current_filter_parameter_corner_ = std::max(min_filter_parameter_corner_, current_filter_parameter_corner_ - adjustment_step_small_);
+                        // Now, try to reduce filters ONLY IF CPU AND LATENCY ARE OKAY
+                        if (cpu_ok_for_aggressive_params && latency_ok_for_aggressive_params) {
+                            if (current_filter_parameter_corner_ > min_filter_parameter_corner_ || current_filter_parameter_surf_ > min_filter_parameter_surf_) {
+                                if (current_filter_parameter_corner_ > min_filter_parameter_corner_) {
+                                     current_filter_parameter_corner_ = std::max(min_filter_parameter_corner_, current_filter_parameter_corner_ - adjustment_step_small_);
+                                }
+                                if (current_filter_parameter_surf_ > min_filter_parameter_surf_) {
+                                    current_filter_parameter_surf_ = std::max(min_filter_parameter_surf_, current_filter_parameter_surf_ - adjustment_step_small_);
+                                }
+                                RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
+                                                     "HEALTHY: Reducing filter sizes (ICP not increased or at max; CPU & Latency OK). New Corner: %.3f, New Surf: %.3f",
+                                                     current_filter_parameter_corner_, current_filter_parameter_surf_);
+                            } else {
+                                RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 5000,
+                                                     "HEALTHY: Parameters optimal or held (ICP: %d, Filters: C=%.3f, S=%.3f, CPU: %.2f, Latency: %.3fs). No aggressive changes made.",
+                                                     current_icp_iterations_, min_filter_parameter_corner_, min_filter_parameter_surf_, latest_cpu_load_, latest_pipeline_latency_sec_);
                             }
-                            if (current_filter_parameter_surf_ > min_filter_parameter_surf_) {
-                                current_filter_parameter_surf_ = std::max(min_filter_parameter_surf_, current_filter_parameter_surf_ - adjustment_step_small_);
-                            }
-                            RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
-                                                 "HEALTHY: Reducing filter sizes (ICP not increased or at max). New Corner: %.3f, New Surf: %.3f",
-                                                 current_filter_parameter_corner_, current_filter_parameter_surf_);
                         } else {
-                            RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 5000,
-                                                 "HEALTHY: Parameters optimal or held (ICP: %d, Filters: C=%.3f, S=%.3f, CPU: %.2f)",
-                                                 current_icp_iterations_, min_filter_parameter_corner_, min_filter_parameter_surf_, latest_cpu_load_);
+                            // Log that filters are not being reduced due to CPU or Latency constraints/staleness
+                             RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
+                                                 "HEALTHY: Not reducing filter sizes due to CPU (%.2f, Fresh: %s, Mod Thr: %.2f) or Latency (%.3fs, Fresh: %s, High Thr: %.2fs) not being optimal for aggressive changes.",
+                                                 latest_cpu_load_, cpu_metric_fresh ? "yes" : "no", cpu_load_threshold_moderate_,
+                                                 latest_pipeline_latency_sec_, latency_metric_fresh ? "yes" : "no", pipeline_latency_threshold_high_sec_);
                         }
                     }
                 } else { // Not enough healthy cycles yet for probing
