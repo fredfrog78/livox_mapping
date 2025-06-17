@@ -64,6 +64,7 @@
 
 #include "adaptive_parameter_manager_types.h" // For LaserMappingHealth enum
 #include "std_msgs/msg/int32.hpp"           // To publish enum as integer
+#include "std_msgs/msg/float32.hpp"         // For pipeline latency
 
 typedef pcl::PointXYZI PointType;
 
@@ -238,6 +239,9 @@ public:
     param_callback_handle_ = this->add_on_set_parameters_callback(
         std::bind(&LaserMapping::parametersCallback, this, std::placeholders::_1));
 
+    pub_pipeline_latency_ = this->create_publisher<std_msgs::msg::Float32>("/laser_mapping/pipeline_latency_sec", 10);
+    RCLCPP_INFO(this->get_logger(), "Publisher for /laser_mapping/pipeline_latency_sec initialized.");
+
     RCLCPP_INFO(this->get_logger(), "LaserMapping Node Initialized.");
   }
 
@@ -307,6 +311,7 @@ private:
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pub_icp_correspondence_markers_;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pub_selected_feature_markers_;
   rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr pub_health_status_;
+  rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr pub_pipeline_latency_;
   
   nav_msgs::msg::Odometry odomAftMapped_;
 
@@ -531,8 +536,10 @@ private:
     if (!(newLaserCloudCornerLast_ && newLaserCloudSurfLast_ && newLaserCloudFullRes_ &&
         std::abs(timeLaserCloudSurfLast_ - timeLaserCloudCornerLast_) < 0.005 &&
         std::abs(timeLaserCloudFullRes_ - timeLaserCloudCornerLast_) < 0.005)) {
-      return;
+      return; // Early exit if no new data or data is not synced
     }
+
+    auto loop_start_time = this->now(); // Start timing after new data check
 
     newLaserCloudCornerLast_ = false;
     newLaserCloudSurfLast_ = false;
@@ -819,9 +826,20 @@ private:
 
     std_msgs::msg::Int32 health_msg;
     health_msg.data = static_cast<int>(current_health);
-    if(pub_health_status_) { // Check if publisher is initialized
+    if(pub_health_status_) {
         pub_health_status_->publish(health_msg);
     }
+
+    // --- Add Latency Publishing Here ---
+    if (pub_pipeline_latency_) {
+        auto loop_end_time = this->now();
+        auto duration = loop_end_time - loop_start_time;
+        std_msgs::msg::Float32 latency_msg;
+        latency_msg.data = duration.seconds();
+        pub_pipeline_latency_->publish(latency_msg);
+        RCLCPP_DEBUG(this->get_logger(), "Published pipeline latency: %.4f s", latency_msg.data);
+    }
+    // --- End Latency Publishing ---
   }
 
 }; // LaserMapping Class End
