@@ -533,13 +533,28 @@ private:
     }
 
   void processMappingLoop() {
+    RCLCPP_DEBUG_THROTTLE(this->get_logger(), *this->get_clock(), 5000, "processMappingLoop called.");
     if (!(newLaserCloudCornerLast_ && newLaserCloudSurfLast_ && newLaserCloudFullRes_ &&
         std::abs(timeLaserCloudSurfLast_ - timeLaserCloudCornerLast_) < 0.005 &&
         std::abs(timeLaserCloudFullRes_ - timeLaserCloudCornerLast_) < 0.005)) {
-      return; // Early exit if no new data or data is not synced
+
+          // Add diagnostic logging for early exit
+          if (!newLaserCloudCornerLast_) RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 5000, "processMappingLoop: Early exit - newLaserCloudCornerLast_ is false.");
+          if (!newLaserCloudSurfLast_) RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 5000, "processMappingLoop: Early exit - newLaserCloudSurfLast_ is false.");
+          if (!newLaserCloudFullRes_) RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 5000, "processMappingLoop: Early exit - newLaserCloudFullRes_ is false.");
+          if (std::abs(timeLaserCloudSurfLast_ - timeLaserCloudCornerLast_) >= 0.005) {
+              RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 5000, "processMappingLoop: Early exit - SurfLast/CornerLast timestamp mismatch: %.6f", std::abs(timeLaserCloudSurfLast_ - timeLaserCloudCornerLast_));
+          }
+          if (std::abs(timeLaserCloudFullRes_ - timeLaserCloudCornerLast_) >= 0.005) {
+              RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 5000, "processMappingLoop: Early exit - FullRes/CornerLast timestamp mismatch: %.6f", std::abs(timeLaserCloudFullRes_ - timeLaserCloudCornerLast_));
+          }
+      return;
     }
 
     auto loop_start_time = this->now(); // Start timing after new data check
+    RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
+                             "LM PARAMS: ICP Iter=%d, CornerFilter=%.3f, SurfFilter=%.3f",
+                             icp_max_iterations_, filter_param_corner_, filter_param_surf_);
 
     newLaserCloudCornerLast_ = false;
     newLaserCloudSurfLast_ = false;
@@ -745,6 +760,11 @@ private:
       }
       last_icp_delta_rotation_ = deltaR_final; // Store for health
       last_icp_delta_translation_ = deltaT_final; // Store for health
+      RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
+                             "LM ICP: Actual iterations performed: %d (max_set: %d). DeltaR: %.4f, DeltaT: %.4f. Degenerate: %s",
+                             actualIterCount, icp_max_iterations_,
+                             last_icp_delta_rotation_, last_icp_delta_translation_,
+                             isDegenerate_ ? "true" : "false");
 
       if (enable_health_warnings_param_) {
           if (last_icp_delta_rotation_ > max_icp_delta_rotation_deg_param_) RCLCPP_WARN(this->get_logger(), "LaserMapping: ICP delta rotation (%.2f deg) exceeds threshold (%.2f deg).", last_icp_delta_rotation_, max_icp_delta_rotation_deg_param_);
@@ -836,6 +856,9 @@ private:
         auto duration = loop_end_time - loop_start_time;
         std_msgs::msg::Float32 latency_msg;
         latency_msg.data = duration.seconds();
+        RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
+                             "LM DURATION: processMappingLoop main block took %.4f s",
+                             duration.seconds());
         pub_pipeline_latency_->publish(latency_msg);
         RCLCPP_DEBUG(this->get_logger(), "Published pipeline latency: %.4f s", latency_msg.data);
     }
