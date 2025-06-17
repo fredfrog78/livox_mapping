@@ -33,6 +33,7 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
+#include <cstdio> // For printf
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/point_cloud2.hpp"
 #include "nav_msgs/msg/odometry.hpp"
@@ -914,11 +915,26 @@ private:
 
 
 int main(int argc, char** argv) {
+  printf("LASER_MAPPING_MAIN_LOG: main() started.\n"); fflush(stdout);
+
   rclcpp::init(argc, argv);
+  printf("LASER_MAPPING_MAIN_LOG: rclcpp::init() completed.\n"); fflush(stdout);
+
+  printf("LASER_MAPPING_MAIN_LOG: Before creating LaserMapping shared_ptr.\n"); fflush(stdout);
   auto laser_mapping_node = std::make_shared<LaserMapping>();
+  printf("LASER_MAPPING_MAIN_LOG: After creating LaserMapping shared_ptr.\n"); fflush(stdout);
+
   rclcpp::executors::SingleThreadedExecutor executor;
+  printf("LASER_MAPPING_MAIN_LOG: Before executor.add_node().\n"); fflush(stdout);
   executor.add_node(laser_mapping_node);
+  printf("LASER_MAPPING_MAIN_LOG: After executor.add_node().\n"); fflush(stdout);
+
+  printf("LASER_MAPPING_MAIN_LOG: Before executor.spin().\n"); fflush(stdout);
   executor.spin();
+
+  // These lines might not be reached if spin() is blocking or node crashes
+  printf("LASER_MAPPING_MAIN_LOG: executor.spin() finished (should not happen if spin is indefinite).\n"); fflush(stdout);
   rclcpp::shutdown();
+  printf("LASER_MAPPING_MAIN_LOG: rclcpp::shutdown() completed.\n"); fflush(stdout);
   return 0;
 }
