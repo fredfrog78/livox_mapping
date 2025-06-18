@@ -912,5 +912,3 @@ int main(int argc, char** argv) {
   printf("LASER_MAPPING_MAIN_LOG: rclcpp::shutdown() completed.\n"); fflush(stdout);
   return 0;
 }
-
-[end of src/laserMapping.cpp]
