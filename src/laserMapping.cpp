@@ -92,9 +92,8 @@ public:
                    filter_param_surf_(0.4) 
   {
     RCLCPP_ERROR(this->get_logger(), "LM_CONSTRUCTOR_LOG: Entry point.");
-    RCLCPP_INFO(this->get_logger(), "Initializing LaserMapping Node");
+    RCLCPP_INFO(this->get_logger(), "Initializing LaserMapping Node"); // Keep original INFO
 
-    // Declare and get parameters
     RCLCPP_ERROR(this->get_logger(), "LM_CONSTRUCTOR_LOG: Initializing general parameters.");
     this->declare_parameter<bool>("markers_icp_corr", false);
     this->get_parameter("markers_icp_corr", markers_icp_corr_);
@@ -116,7 +115,7 @@ public:
     this->declare_parameter<double>("filter_parameter_corner", 0.2,
         rcl_interfaces::msg::ParameterDescriptor()
             .set__description("Voxel grid leaf size for corner points in laserMapping.")
-            .set__read_only(false)); // Explicitly mark as not read-only for clarity
+            .set__read_only(false));
     this->get_parameter("filter_parameter_corner", filter_param_corner_);
     RCLCPP_INFO(this->get_logger(), "Initial filter parameter corner: %f", filter_param_corner_);
     
@@ -129,6 +128,7 @@ public:
     RCLCPP_ERROR(this->get_logger(), "LM_CONSTRUCTOR_LOG: General parameters initialized.");
 
     RCLCPP_ERROR(this->get_logger(), "LM_CONSTRUCTOR_LOG: Initializing health parameters.");
+    // This is the *first* (and should be only) block of health parameter declarations
     this->declare_parameter<bool>("health.enable_health_warnings", true);
     this->declare_parameter<int>("health.min_downsampled_corner_features", 12);
     this->declare_parameter<int>("health.min_downsampled_surf_features", 30);
@@ -154,7 +154,7 @@ public:
     this->declare_parameter<int>("icp_max_iterations", 10,
         rcl_interfaces::msg::ParameterDescriptor()
             .set__description("Maximum number of iterations for the ICP algorithm.")
-            .set__read_only(false)); // Mark as dynamically configurable
+            .set__read_only(false));
     this->get_parameter("icp_max_iterations", icp_max_iterations_);
     RCLCPP_INFO(this->get_logger(), "Initial ICP max iterations: %d", icp_max_iterations_); // Keep original INFO
     RCLCPP_ERROR(this->get_logger(), "LM_CONSTRUCTOR_LOG: icp_max_iterations parameter initialized to %d.", icp_max_iterations_);
@@ -165,33 +165,9 @@ public:
     RCLCPP_INFO(this->get_logger(), "filter_parameter_surf: %f", filter_param_surf_);
     RCLCPP_INFO(this->get_logger(), "icp_max_iterations: %d", icp_max_iterations_);
 
-    // Declare and get health monitoring parameters
-    this->declare_parameter<bool>("health.enable_health_warnings", true);
-    this->declare_parameter<int>("health.min_downsampled_corner_features", 12);
-    this->declare_parameter<int>("health.min_downsampled_surf_features", 30);
-    this->declare_parameter<int>("health.min_map_corner_points_for_icp", 30);
-    this->declare_parameter<int>("health.min_map_surf_points_for_icp", 100);
-    this->declare_parameter<int>("health.min_icp_correspondences", 40);
-    this->declare_parameter<double>("health.max_icp_delta_rotation_deg", 5.0);
-    this->declare_parameter<double>("health.max_icp_delta_translation_cm", 20.0);
-    this->declare_parameter<bool>("health.warn_on_icp_degeneracy", true);
-
-    this->get_parameter("health.enable_health_warnings", enable_health_warnings_param_);
-    this->get_parameter("health.min_downsampled_corner_features", min_downsampled_corner_features_param_);
-    this->get_parameter("health.min_downsampled_surf_features", min_downsampled_surf_features_param_);
-    this->get_parameter("health.min_map_corner_points_for_icp", min_map_corner_points_for_icp_param_);
-    this->get_parameter("health.min_map_surf_points_for_icp", min_map_surf_points_for_icp_param_);
-    this->get_parameter("health.min_icp_correspondences", min_icp_correspondences_param_);
-    this->get_parameter("health.max_icp_delta_rotation_deg", max_icp_delta_rotation_deg_param_);
-    this->get_parameter("health.max_icp_delta_translation_cm", max_icp_delta_translation_cm_param_);
-    this->get_parameter("health.warn_on_icp_degeneracy", warn_on_icp_degeneracy_param_);
-
-    RCLCPP_INFO(this->get_logger(), "Health Monitoring Parameters (LaserMapping):");
-    // ... (Log messages for health params remain the same)
-    RCLCPP_INFO(this->get_logger(), "------------------------------------");
+    // The redundant block of health parameter declarations and their logging was here and is now removed.
 
     RCLCPP_ERROR(this->get_logger(), "LM_CONSTRUCTOR_LOG: Initializing PCL shared pointers.");
-    // Initialize PCL shared pointers
     laserCloudCornerLast_ = std::make_shared<pcl::PointCloud<PointType>>();
     laserCloudCornerLast_down_ = std::make_shared<pcl::PointCloud<PointType>>();
     laserCloudSurfLast_ = std::make_shared<pcl::PointCloud<PointType>>();
@@ -206,11 +182,10 @@ public:
     laserCloudFullRes2_ = std::make_shared<pcl::PointCloud<PointType>>();
     laserCloudFullResColor_ = std::make_shared<pcl::PointCloud<pcl::PointXYZRGB>>();
     laserCloudFullResColor_pcd_ = std::make_shared<pcl::PointCloud<pcl::PointXYZRGB>>();
-
     kdtreeCornerFromMap_ = std::make_shared<pcl::KdTreeFLANN<PointType>>();
     kdtreeSurfFromMap_ = std::make_shared<pcl::KdTreeFLANN<PointType>>();
     RCLCPP_ERROR(this->get_logger(), "LM_CONSTRUCTOR_LOG: PCL shared pointers initialized.");
-    
+
     RCLCPP_ERROR(this->get_logger(), "LM_CONSTRUCTOR_LOG: Resizing PCL point cloud arrays.");
     laserCloudCornerArray_.resize(laserCloudNum_);
     laserCloudSurfArray_.resize(laserCloudNum_);
@@ -228,10 +203,9 @@ public:
     transformTobeMapped_.fill(0.0f);
     transformAftMapped_.fill(0.0f);
     transformLastMapped_.fill(0.0f);
-
     matA0_ = cv::Mat(10, 3, CV_32F, cv::Scalar::all(0));
     matB0_ = cv::Mat(10, 1, CV_32F, cv::Scalar::all(-1));
-    matX0_ = cv::Mat(3, 1, CV_32F, cv::Scalar::all(0)); // Corrected size to 3x1
+    matX0_ = cv::Mat(3, 1, CV_32F, cv::Scalar::all(0));
     matA1_ = cv::Mat(3, 3, CV_32F, cv::Scalar::all(0));
     matD1_ = cv::Mat(1, 3, CV_32F, cv::Scalar::all(0));
     matV1_ = cv::Mat(3, 3, CV_32F, cv::Scalar::all(0));
@@ -251,13 +225,13 @@ public:
     pub_icp_correspondence_markers_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/debug/icp_correspondences", 10);
     pub_selected_feature_markers_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/debug/selected_features", 10);
     pub_health_status_ = this->create_publisher<std_msgs::msg::Int32>("/laser_mapping/health_status", 10);
-    // pub_pipeline_latency_ is initialized later
-    RCLCPP_ERROR(this->get_logger(), "LM_CONSTRUCTOR_LOG: Core publishers created (latency publisher later).");
+    RCLCPP_ERROR(this->get_logger(), "LM_CONSTRUCTOR_LOG: Core publishers created.");
 
     RCLCPP_ERROR(this->get_logger(), "LM_CONSTRUCTOR_LOG: Initializing odometry message.");
     odomAftMapped_.header.frame_id = "camera_init";
     odomAftMapped_.child_frame_id = "aft_mapped";
 
+    RCLCPP_ERROR(this->get_logger(), "LM_CONSTRUCTOR_LOG: Creating subscriptions.");
     subLaserCloudCornerLast_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
         "/laser_cloud_sharp", rclcpp::QoS(100), std::bind(&LaserMapping::laserCloudCornerLastHandler, this, std::placeholders::_1));
     subLaserCloudSurfLast_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
@@ -266,10 +240,10 @@ public:
         "/livox_cloud", rclcpp::QoS(100), std::bind(&LaserMapping::laserCloudFullResHandler, this, std::placeholders::_1));
     RCLCPP_ERROR(this->get_logger(), "LM_CONSTRUCTOR_LOG: Subscriptions created.");
 
-    RCLCPP_INFO(this->get_logger(), "--- LaserMapping Subscribed Topics ---");
-    // ... (Log messages for subscriptions remain the same)
-    RCLCPP_INFO(this->get_logger(), "------------------------------------");
+    RCLCPP_INFO(this->get_logger(), "--- LaserMapping Subscribed Topics ---"); // This was part of the redundant block, but it's general info. Keep it once.
+    RCLCPP_INFO(this->get_logger(), "------------------------------------"); // This was part of the redundant block, but it's general info. Keep it once.
 
+    RCLCPP_ERROR(this->get_logger(), "LM_CONSTRUCTOR_LOG: Creating TF broadcaster.");
     tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(this);
     RCLCPP_ERROR(this->get_logger(), "LM_CONSTRUCTOR_LOG: TF broadcaster created.");
 
@@ -285,7 +259,7 @@ public:
 
     RCLCPP_ERROR(this->get_logger(), "LM_CONSTRUCTOR_LOG: Initializing pipeline latency publisher.");
     pub_pipeline_latency_ = this->create_publisher<std_msgs::msg::Float32>("/laser_mapping/pipeline_latency_sec", 10);
-    RCLCPP_INFO(this->get_logger(), "Publisher for /laser_mapping/pipeline_latency_sec initialized."); // Keep original INFO
+    RCLCPP_INFO(this->get_logger(), "Publisher for /laser_mapping/pipeline_latency_sec initialized.");
 
     RCLCPP_ERROR(this->get_logger(), "LM_CONSTRUCTOR_LOG: END. LaserMapping Node Initialized message follows if successful.");
     RCLCPP_INFO(this->get_logger(), "LaserMapping Node Initialized.");
@@ -938,3 +912,5 @@ int main(int argc, char** argv) {
   printf("LASER_MAPPING_MAIN_LOG: rclcpp::shutdown() completed.\n"); fflush(stdout);
   return 0;
 }
+
+[end of src/laserMapping.cpp]
